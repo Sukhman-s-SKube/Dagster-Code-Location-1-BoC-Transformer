@@ -6,4 +6,6 @@ metadata:
 spec:
   type: NodePort
   selector: { app: code-location-1 }
-  port: 3030
+  ports:
+    - port: 3030
+      targetPort: 3030

@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: code-location-1
+  namespace: dagster
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: code-location-1
+  template:
+    metadata:
+      labels:
+        app: code-location-1
+    spec:
+      containers:
+      - name: code-location-1
+        image: IMAGE_PLACEHOLDER
+        envFrom:
+        - secretRef:
+            name: dagster
+        ports:
+        - containerPort: 3030

@@ -1,0 +1,19 @@
+name: Dagster Code Location pipeline
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    uses: Sukhman-s-SKube/gh-actions/.github/workflows/build-deploy.yaml@main
+    with:
+      IMAGE_NAME:    dagster/code-location-1
+      DOCKERFILE_PATH: ./Dockerfile
+      MANIFEST_PATH:  ./k8s
+      KUBE_NAMESPACE: dagster
+    secrets:
+      HARBOR_URL:      ${{ secrets.HARBOR_URL }}
+      HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+      HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+      KUBE_CONFIG:     ${{ secrets.KUBECONFIG }}

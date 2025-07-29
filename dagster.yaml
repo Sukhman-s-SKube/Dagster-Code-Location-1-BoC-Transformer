@@ -1,0 +1,31 @@
+storage:
+  postgres:
+    postgres_db:
+      hostname:
+        env: POSTGRES_HOST
+      port:
+        env: POSTGRES_PORT
+      username:
+        env: POSTGRES_USER
+      password:
+        env: POSTGRES_PASSWORD
+      db_name:
+        env: POSTGRES_DB
+
+compute_logs:
+  module: dagster_aws.s3.compute_log_manager
+  class:  S3ComputeLogManager
+  config:
+    bucket: dagster
+    prefix: compute-logs
+    endpoint_url:
+      env: AWS_ENDPOINT_URL
+    access_key_id:
+      env: AWS_ACCESS_KEY_ID
+    secret_access_key:
+      env: AWS_SECRET_ACCESS_KEY
+    region_name:
+      env: AWS_REGION
+
+telemetry:
+  enabled: false

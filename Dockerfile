@@ -17,4 +17,4 @@ RUN mkdir -p ${DAGSTER_HOME}/history \
 RUN useradd -u 1000 -U -m dagster
 USER dagster
 
-ENTRYPOINT ["dagster", "api", "grpc", "-m", "boc_transformer.repository", "-p", "3030"]
+ENTRYPOINT ["dagster", "api", "grpc", "-m", "boc_transformer.repository", "-h", "0.0.0.0", "-p", "3030"]

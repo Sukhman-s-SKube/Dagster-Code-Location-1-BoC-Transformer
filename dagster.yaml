@@ -20,12 +20,9 @@ compute_logs:
     prefix: compute-logs
     endpoint_url:
       env: AWS_ENDPOINT_URL
-    access_key_id:
-      env: AWS_ACCESS_KEY_ID
-    secret_access_key:
-      env: AWS_SECRET_ACCESS_KEY
-    region_name:
+    region:
       env: AWS_REGION
+    use_ssl: false
 
 telemetry:
   enabled: false

@@ -2,3 +2,9 @@ dagster
 dagster-webserver
 dagster-aws
 dagster-postgres
+pandas
+numpy
+requests
+fredapi
+celery
+kubernetes

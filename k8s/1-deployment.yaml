@@ -19,7 +19,7 @@ spec:
         envFrom:
         - secretRef:
             name: dagster
-        - configMapKeyRef:
+        - configMapRef:
             name: dagster
         ports:
         - containerPort: 3030

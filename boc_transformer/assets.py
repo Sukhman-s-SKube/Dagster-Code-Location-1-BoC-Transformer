@@ -174,6 +174,6 @@ def daily_yield_spread_and_macros(context) -> pd.DataFrame:
     context.add_output_metadata({
         "preview": (f"{date_str} | 2y={yields['y2']:.2f}% "
                     f"10y={yields['y10']:.2f}% spread={spread:.2f} "
-                    f"oil={oil_val} unemploy={unemploy}")
+                    f"oil={oil_val} unemploy={unemploy:.2f}")
     })
     return df

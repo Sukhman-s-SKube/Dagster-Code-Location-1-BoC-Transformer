@@ -1,7 +1,7 @@
 import os
 from dagster import job, op, Definitions
 from dagster_aws.s3 import s3_pickle_io_manager, s3_resource
-from .assets import daily_policy_rate, daily_cpi
+from .assets import daily_policy_rate, daily_cpi, daily_yield_spread_and_macros
 from .resources import fred_api, boc_api
 from .schedules import daily_policy_rate_schedule, daily_policy_rate_job, daily_cpi_job, daily_cpi_schedule
 
@@ -26,7 +26,7 @@ def hello_world():
 def demo_job():
     hello_world()
 
-defs = Definitions(jobs=[demo_job, daily_policy_rate_job, daily_cpi_job], assets=[daily_policy_rate, daily_cpi],
+defs = Definitions(jobs=[demo_job, daily_policy_rate_job, daily_cpi_job], assets=[daily_policy_rate, daily_cpi, daily_yield_spread_and_macros],
     resources={
         "s3": s3,
         "io_manager": io_manager,

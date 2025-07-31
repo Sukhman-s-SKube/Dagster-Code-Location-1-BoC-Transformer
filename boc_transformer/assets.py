@@ -101,13 +101,6 @@ def daily_cpi(context) -> pd.DataFrame:
     )
     return df
 
-import pandas as pd
-import requests
-from dagster import asset, DailyPartitionsDefinition
-from fredapi import Fred
-
-DAILY = DailyPartitionsDefinition(start_date="2015-01-01")
-
 @asset(
     partitions_def=DAILY,
     required_resource_keys={"boc_api", "fred_api"},
@@ -125,7 +118,7 @@ DAILY = DailyPartitionsDefinition(start_date="2015-01-01")
         },
         "unit": "percent (yields & unemploy), USD/barrel (oil)",
     },
-    description="Daily 2-, 5-, and 10-year yields from BoC Valet, the 2–10 spread, WTI oil price, and Canadian unemployment rate.",
+    description="Daily 2, 5, and 10 year yields from BoC Valet, the 2–10 spread, oil price, and Canadian unemployment rate.",
 )
 def daily_yield_spread_and_macros(context) -> pd.DataFrame:
     date_str = context.partition_key
@@ -142,7 +135,7 @@ def daily_yield_spread_and_macros(context) -> pd.DataFrame:
         resp.raise_for_status()
         obs = resp.json().get("observations", [])
         if not obs:
-            context.log.debug(f"No yield {sid} on {date_str}; skipping entire row.")
+            context.log.warning(f"No yield {sid} on {date_str}; skipping entire row.")
             return pd.DataFrame(columns=["date", *series_map.keys(), "spread_2_10", "oil", "unemploy"])
         yields[key] = float(obs[0][sid]["v"])
 
@@ -153,7 +146,7 @@ def daily_yield_spread_and_macros(context) -> pd.DataFrame:
         "DCOILWTICO", observation_start=date_str, observation_end=date_str
     )
     if oil_series.empty:
-        context.log.debug(f"No oil price (WTI) on {date_str}")
+        context.log.warning(f"No oil price on {date_str}")
         oil_val = None
     else:
         oil_val = float(oil_series.iloc[0])
@@ -162,7 +155,7 @@ def daily_yield_spread_and_macros(context) -> pd.DataFrame:
         "LRUNTTTTCAQ156S", observation_start=date_str, observation_end=date_str
     )
     if unem_series.empty:
-        context.log.debug(f"No unemployment rate on {date_str}")
+        context.log.warning(f"No unemployment rate on {date_str}")
         unemploy = None
     else:
         unemploy = float(unem_series.iloc[0])

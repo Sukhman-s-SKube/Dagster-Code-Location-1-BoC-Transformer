@@ -88,7 +88,7 @@ def daily_cpi(context) -> pd.DataFrame:
     obs = resp.json().get("observations", [])
 
     if not obs:
-        context.log.debug(f"No CPI release on {date_str}")
+        context.log.warning(f"No CPI release on {date_str}")
         return pd.DataFrame(columns=["date", "cpi"])
 
     cpi_value = float(obs[0][series]["v"])

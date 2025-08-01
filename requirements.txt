@@ -8,3 +8,4 @@ requests
 fredapi
 celery
 kubernetes
+pyarrow

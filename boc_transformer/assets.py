@@ -1,5 +1,7 @@
+import os
 import numpy as np
 import pandas as pd
+import pyarrow as pa, pyarrow.parquet as pq
 import requests
 from dagster import (
     asset,
@@ -7,6 +9,7 @@ from dagster import (
     AssetOut,
     DailyPartitionsDefinition,
     WeeklyPartitionsDefinition,
+    LastPartitionMapping
 )
 from fredapi import Fred
 
@@ -186,3 +189,87 @@ def daily_yield_spread_and_macros(context) -> pd.DataFrame:
     })
 
     return df
+
+@multi_asset(
+    partitions_def=DAILY,
+    partition_mappings={
+        "daily_policy_rate": LastPartitionMapping(length=90),
+        "daily_cpi": LastPartitionMapping(length=90),
+        "daily_yield_spread_and_macros": LastPartitionMapping(length=90)
+    },
+    outs={
+        "X": AssetOut(
+            description="Feature tensor (N, 90, D)",
+            metadata={"dtype": "float32"},
+        ),
+        "y": AssetOut(
+            description="Target array (N,)",
+            metadata={"dtype": "float32"},
+        ),
+    },
+    group_name="features",
+    description="Merge 90 days of raw data, forward-fill gaps, build sliding windows.",
+)
+def daily_assemble_big_features(
+    context,
+    daily_policy_rate: pd.DataFrame,
+    daily_cpi: pd.DataFrame,
+    daily_yield_spread_and_macros: pd.DataFrame,
+):
+    df = (
+        daily_policy_rate
+        .merge(daily_cpi, on="date", how="outer")
+        .merge(daily_yield_spread_and_macros, on="date", how="outer")
+        .sort_values("date")
+        .ffill()
+        .dropna()
+    )
+
+    seq_len = 90
+    rows, cols = df.shape
+
+    features_dir = os.path.join(context.instance.storage_directory(), "features")
+    os.makedirs(features_dir, exist_ok=True)
+    parquet_path = os.path.join(features_dir, f"{context.partition_key}.parquet")
+    pq.write_table(pa.Table.from_pandas(df), parquet_path)
+
+    if rows < seq_len:
+        context.add_output_metadata(
+            output_name="X",
+            metadata={
+                "status": "insufficient_history",
+                "rows_available": rows,
+                "rows_needed": seq_len,
+            },
+        )
+        return {
+            "X": np.empty((0, seq_len, cols - 1), dtype=np.float32),
+            "y": np.empty((0,), dtype=np.float32),
+        }
+
+    matrix = df.drop(columns="date").to_numpy(dtype=np.float32)
+    X = np.stack([matrix[i : i + seq_len] for i in range(rows - seq_len)])
+    y = matrix[seq_len:, 0]
+
+    preview = (
+        df.head(5)
+          .append(df.tail(5))
+          .to_markdown(index=False)
+    )
+    stats_md = df.describe().to_markdown()
+
+    context.add_output_metadata(
+        output_name="X",
+        metadata={
+            "path": parquet_path,
+            "rows": rows,
+            "cols": cols,
+            "windows": X.shape[0],
+            "date_start": df["date"].min().strftime("%Y-%m-%d"),
+            "date_end": df["date"].max().strftime("%Y-%m-%d"),
+            "preview": preview,
+            "stats": stats_md,
+        },
+    )
+
+    return {"X": X, "y": y}

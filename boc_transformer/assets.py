@@ -19,7 +19,7 @@ DAILY = DailyPartitionsDefinition(start_date="2015-01-01")
 WEEKLY = WeeklyPartitionsDefinition(start_date="2020-01-06")
 
 SEQ_LEN   = 90
-HORIZON   = 1
+HORIZON   = 7
 STRIDE    = 1
 
 @asset(

@@ -267,7 +267,7 @@ def daily_assemble_big_features(
         return empty_X, empty_Y
 
     matrix = df.drop(columns="date").to_numpy(dtype=np.float32)
-    X = np.stack([matrix[i : i  seq_len] for i in range(rows - seq_len)])
+    X = np.stack([matrix[i : i + seq_len] for i in range(rows - seq_len)])
     Y = matrix[seq_len:, 0]
 
     preview = (

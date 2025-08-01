@@ -18,6 +18,10 @@ from fredapi import Fred
 DAILY = DailyPartitionsDefinition(start_date="2015-01-01")
 WEEKLY = WeeklyPartitionsDefinition(start_date="2020-01-06")
 
+SEQ_LEN   = 90
+HORIZON   = 7
+STRIDE    = 1
+
 @asset(
     partitions_def=DAILY,
     required_resource_keys={"boc_api"},
@@ -196,87 +200,94 @@ def daily_yield_spread_and_macros(context) -> pd.DataFrame:
     partitions_def=DAILY,
     ins={
         "daily_policy_rate": AssetIn(
-            partition_mapping=TimeWindowPartitionMapping(start_offset=-89, end_offset=0)
+            partition_mapping=TimeWindowPartitionMapping(start_offset=-(SEQ_LEN+HORIZON-1),
+                                                         end_offset=0)
         ),
         "daily_cpi": AssetIn(
-            partition_mapping=TimeWindowPartitionMapping(start_offset=-89, end_offset=0)
+            partition_mapping=TimeWindowPartitionMapping(start_offset=-(SEQ_LEN+HORIZON-1),
+                                                         end_offset=0)
         ),
         "daily_yield_spread_and_macros": AssetIn(
-            partition_mapping=TimeWindowPartitionMapping(start_offset=-89, end_offset=0)
+            partition_mapping=TimeWindowPartitionMapping(start_offset=-(SEQ_LEN+HORIZON-1),
+                                                         end_offset=0)
         ),
     },
     outs={
-        "X": AssetOut(description="Feature tensor (N, 90, D)", metadata={"dtype": "float32"}),
-        "Y": AssetOut(description="Target array (N,)",         metadata={"dtype": "float32"}),
+        "X": AssetOut(description=f"N×{SEQ_LEN}×D feature tensor", metadata={"dtype": "float32"}),
+        "Y": AssetOut(description="Nlength target array",        metadata={"dtype": "float32"}),
     },
     group_name="features",
-    description="Merge 90 days of raw data, ffill / bfill gaps, build sliding windows.",
+    description=(
+        f"Sliding-window {SEQ_LEN}-day feature/target pairs with a {HORIZON} day "
+        "forecast horizon."
+    ),
 )
 def daily_assemble_big_features(
     context,
-    daily_policy_rate: Dict[str, pd.DataFrame],
-    daily_cpi: Dict[str, pd.DataFrame],
-    daily_yield_spread_and_macros: Dict[str, pd.DataFrame],
+    daily_policy_rate: dict[str, pd.DataFrame],
+    daily_cpi: dict[str, pd.DataFrame],
+    daily_yield_spread_and_macros: dict[str, pd.DataFrame],
 ):
-    def _concat(mapping: Dict[str, pd.DataFrame]) -> pd.DataFrame:
-        if not mapping:
-            return pd.DataFrame(columns=["date"])
-        return pd.concat(mapping.values(), ignore_index=True).sort_values("date")
-
-    seq_len = 90
-    full_range = pd.date_range(end=context.partition_key, periods=seq_len, freq="D")
+    def _concat(d):
+        return (pd.concat(d.values(), ignore_index=True).sort_values("date")
+                if d else pd.DataFrame(columns=["date"]))
 
     df = (
         _concat(daily_policy_rate)
         .merge(_concat(daily_cpi),                  on="date", how="outer")
         .merge(_concat(daily_yield_spread_and_macros), on="date", how="outer")
         .set_index("date")
-        .reindex(full_range)
-        .ffill()
-        .bfill()
-        .reset_index()
-        .rename(columns={"index": "date"})
     )
 
-    rows, cols   = df.shape
-    feature_cols = cols - 1
-    matrix       = df.drop(columns="date").to_numpy(dtype=np.float32)
+    full_range = pd.date_range(end=context.partition_key,
+                               periods=SEQ_LEN + HORIZON,
+                               freq="D")
+    df = (df.reindex(full_range)
+            .ffill()
+            .bfill()
+            .reset_index()
+            .rename(columns={"index": "date"}))
 
-    n_windows = max(0, rows - seq_len)
-    if n_windows == 0:
-        X = np.empty((0, seq_len, feature_cols), dtype=np.float32)
-        Y = np.empty((0,),                     dtype=np.float32)
-    else:
-        X = np.stack([matrix[i : i + seq_len] for i in range(n_windows)])
-        Y = matrix[seq_len:, 0]
+    rows, cols = df.shape
+    windows_available = max((rows - SEQ_LEN - HORIZON) // STRIDE + 1, 0)
 
     features_dir = os.path.join(context.instance.storage_directory(), "features")
     os.makedirs(features_dir, exist_ok=True)
     parquet_path = os.path.join(features_dir, f"{context.partition_key}.parquet")
     pq.write_table(pa.Table.from_pandas(df), parquet_path)
 
-    preview_md = (
-        pd.concat([df.head(5), df.tail(5)])
-          .to_markdown(index=False)
-    )
-    stats_md   = df.describe().to_markdown()
+    if windows_available == 0:
+        context.add_output_metadata(
+            output_name="X",
+            metadata={
+                "status":          "insufficient_history",
+                "rows_available":  rows,
+                "rows_needed":     SEQ_LEN + HORIZON,
+            },
+        )
+        empty_shape = (0, SEQ_LEN, cols - 1)
+        return np.empty(empty_shape, np.float32), np.empty((0,), np.float32)
+
+    matrix = df.drop(columns="date").to_numpy(dtype=np.float32)
+
+    idx = range(0, rows - SEQ_LEN - HORIZON + 1, STRIDE)
+    X = np.stack([matrix[i : i + SEQ_LEN] for i in idx])
+    Y = np.stack([matrix[i + SEQ_LEN + HORIZON - 1, 0] for i in idx])
 
     context.add_output_metadata(
         output_name="X",
         metadata={
-            "path":         parquet_path,
-            "rows":         rows,
-            "cols":         cols,
-            "windows":      n_windows,
-            "date_start":   df["date"].min().strftime("%Y-%m-%d"),
-            "date_end":     df["date"].max().strftime("%Y-%m-%d"),
-            "preview":      preview_md,
-            "stats":        stats_md,
+            "path":           parquet_path,
+            "rows":           rows,
+            "cols":           cols,
+            "windows":        int(X.shape[0]),
+            "horizon_days":   HORIZON,
+            "rate_std":       float(df["rate"].std()),
+            "date_start":     str(df["date"].min().date()),
+            "date_end":       str(df["date"].max().date()),
+            "preview":        pd.concat([df.head(5), df.tail(5)]).to_markdown(index=False),
+            "stats":          df.describe().to_markdown(),
         },
-    )
-    context.add_output_metadata(
-        output_name="Y",
-        metadata={"shape": list(Y.shape)},
     )
 
     return X, Y

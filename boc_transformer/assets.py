@@ -249,48 +249,16 @@ def daily_assemble_big_features(
     )
 
     rows, cols = df.shape
-
-    features_dir = os.path.join(context.instance.storage_directory(), "features")
-    os.makedirs(features_dir, exist_ok=True)
-    parquet_path = os.path.join(features_dir, f"{context.partition_key}.parquet")
-    pq.write_table(pa.Table.from_pandas(df), parquet_path)
-
-    if rows < seq_len:
-        context.add_output_metadata(
-            output_name="X",
-            metadata={
-                "status": "insufficient_history",
-                "rows_available": rows,
-                "rows_needed": seq_len,
-            },
-        )
-        empty_X = np.empty((0, seq_len, cols - 1), dtype=np.float32)
-        empty_Y = np.empty((0,), dtype=np.float32)
-        return empty_X, empty_Y
-
     matrix = df.drop(columns="date").to_numpy(dtype=np.float32)
-    X = np.stack([matrix[i : i + seq_len] for i in range(rows - seq_len)])
-    Y = matrix[seq_len:, 0]
 
-    preview = (
-        df.head(5)
-          .append(df.tail(5))
-          .to_markdown(index=False)
-    )
-    stats_md = df.describe().to_markdown()
+    seq_len = 90
+    window_count = rows - seq_len
 
-    context.add_output_metadata(
-        output_name="X",
-        metadata={
-            "path": parquet_path,
-            "rows": rows,
-            "cols": cols,
-            "windows": X.shape[0],
-            "date_start": df["date"].min().strftime("%Y-%m-%d"),
-            "date_end": df["date"].max().strftime("%Y-%m-%d"),
-            "preview": preview,
-            "stats": stats_md,
-        },
-    )
+    if window_count <= 0:
+        X = np.empty((0, seq_len, cols - 1), dtype=np.float32)
+        Y = np.empty((0,), dtype=np.float32)
+    else:
+        X = np.stack([matrix[i : i + seq_len] for i in range(window_count)])
+        Y = matrix[seq_len:, 0]
 
     return X, Y

@@ -234,17 +234,19 @@ def daily_assemble_big_features(
     daily_yield_spread_and_macros = _concat(daily_yield_spread_and_macros)
     seq_len = 90
 
+    full_range = pd.date_range(end=context.partition_key, periods=seq_len, freq="D")
+
     df = (
         daily_policy_rate
-          .merge(daily_cpi, on="date", how="outer")
-          .merge(daily_yield_spread_and_macros, on="date", how="outer")
-          .set_index("date")
+        .merge(daily_cpi, on="date", how="outer")
+        .merge(daily_yield_spread_and_macros, on="date", how="outer")
+        .set_index("date")
+        .reindex(full_range)
+        .ffill()
+        .bfill()
+        .reset_index()
+        .rename(columns={"index": "date"})
     )
-
-    full_range = pd.date_range(end=context.partition_key, periods=seq_len, freq="D")
-    df = df.reindex(full_range).ffill()
-
-    df = df.dropna(subset=["rate", "cpi"]).reset_index().rename(columns={"index": "date"})
 
     rows, cols = df.shape
 

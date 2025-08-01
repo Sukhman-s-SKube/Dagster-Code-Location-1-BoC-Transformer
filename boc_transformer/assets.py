@@ -232,11 +232,13 @@ def daily_assemble_big_features(
     daily_policy_rate = _concat(daily_policy_rate)
     daily_cpi          = _concat(daily_cpi)
     daily_yield_spread_and_macros = _concat(daily_yield_spread_and_macros)
+    seq_len = 90
+
     df = (
         daily_policy_rate
-        .merge(daily_cpi, on="date", how="outer")
-        .merge(daily_yield_spread_and_macros, on="date", how="outer")
-        .set_index("date")
+          .merge(daily_cpi, on="date", how="outer")
+          .merge(daily_yield_spread_and_macros, on="date", how="outer")
+          .set_index("date")
     )
 
     full_range = pd.date_range(end=context.partition_key, periods=seq_len, freq="D")
@@ -244,7 +246,6 @@ def daily_assemble_big_features(
 
     df = df.dropna(subset=["rate", "cpi"]).reset_index().rename(columns={"index": "date"})
 
-    seq_len = 90
     rows, cols = df.shape
 
     features_dir = os.path.join(context.instance.storage_directory(), "features")
@@ -266,7 +267,7 @@ def daily_assemble_big_features(
         return empty_X, empty_Y
 
     matrix = df.drop(columns="date").to_numpy(dtype=np.float32)
-    X = np.stack([matrix[i : i + seq_len] for i in range(rows - seq_len)])
+    X = np.stack([matrix[i : i  seq_len] for i in range(rows - seq_len)])
     Y = matrix[seq_len:, 0]
 
     preview = (

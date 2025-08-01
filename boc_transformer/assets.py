@@ -12,6 +12,7 @@ from dagster import (
     WeeklyPartitionsDefinition,
     TimeWindowPartitionMapping
 )
+from typing import Dict
 from fredapi import Fred
 
 DAILY = DailyPartitionsDefinition(start_date="2015-01-01")
@@ -195,16 +196,13 @@ def daily_yield_spread_and_macros(context) -> pd.DataFrame:
     partitions_def=DAILY,
     ins={
         "daily_policy_rate": AssetIn(
-            partition_mapping=TimeWindowPartitionMapping(start_offset=-89, end_offset=0),
-            fan_in=True
+            partition_mapping=TimeWindowPartitionMapping(start_offset=-89, end_offset=0)
         ),
         "daily_cpi": AssetIn(
-            partition_mapping=TimeWindowPartitionMapping(start_offset=-89, end_offset=0),
-            fan_in=True
+            partition_mapping=TimeWindowPartitionMapping(start_offset=-89, end_offset=0)
         ),
         "daily_yield_spread_and_macros": AssetIn(
-            partition_mapping=TimeWindowPartitionMapping(start_offset=-89, end_offset=0),
-            fan_in=True
+            partition_mapping=TimeWindowPartitionMapping(start_offset=-89, end_offset=0)
         ),
     },
     outs={
@@ -222,10 +220,19 @@ def daily_yield_spread_and_macros(context) -> pd.DataFrame:
 )
 def daily_assemble_big_features(
     context,
-    daily_policy_rate: pd.DataFrame,
-    daily_cpi: pd.DataFrame,
-    daily_yield_spread_and_macros: pd.DataFrame,
+    daily_policy_rate: Dict[str, pd.DataFrame],
+    daily_cpi: Dict[str, pd.DataFrame],
+    daily_yield_spread_and_macros: Dict[str, pd.DataFrame],
 ):
+    def _concat(d):
+         if not d:
+             return pd.DataFrame(columns=["date"])
+         return pd.concat(d.values(), ignore_index=True).sort_values("date")
+
+    daily_policy_rate = _concat(daily_policy_rate)
+    daily_cpi          = _concat(daily_cpi)
+    daily_yield_spread_and_macros = _concat(daily_yield_spread_and_macros)
+
     df = (
         daily_policy_rate
         .merge(daily_cpi, on="date", how="outer")

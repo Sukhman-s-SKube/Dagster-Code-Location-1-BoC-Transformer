@@ -24,30 +24,26 @@ daily_features_job = define_asset_job(
     selection=AssetSelection.keys("X", "Y")
 )
 
-daily_policy_rate_schedule = ScheduleDefinition(
-    name="daily_policy_rate_schedule",
+daily_policy_rate_schedule = ScheduleDefinition.from_job(
+    daily_policy_rate_job,
     cron_schedule="15 6 * * *",
     execution_timezone="America/Toronto",
-    job=daily_policy_rate_job
 )
 
-daily_cpi_schedule = ScheduleDefinition(
-    name="daily_cpi_schedule",
+daily_cpi_schedule = ScheduleDefinition.from_job(
+    daily_cpi_job,
     cron_schedule="15 7 * * *",
     execution_timezone="America/Toronto",
-    job=daily_cpi_job
 )
 
-daily_yield_spread_and_macros_schedule = ScheduleDefinition(
-    name="daily_yield_spread_and_macros_schedule",
+daily_yield_spread_and_macros_schedule = ScheduleDefinition.from_job(
+    daily_yield_spread_and_macros_job,
     cron_schedule="15 8 * * *",
     execution_timezone="America/Toronto",
-    job=daily_yield_spread_and_macros_job
 )
 
-daily_features_schedule = ScheduleDefinition(
-    name="daily_features_schedule",
+daily_features_schedule = ScheduleDefinition.from_job(
+    daily_features_job,
     cron_schedule="15 10 * * *",
     execution_timezone="America/Toronto",
-    job=daily_features_job
 )

@@ -14,6 +14,11 @@ daily_cpi_job = define_asset_job(
     selection=AssetSelection.keys("daily_cpi")
 )
 
+daily_yield_spread_and_macros_job = define_asset_job(
+    name="materialize_daily_yield_spread_and_macros",
+    selection=AssetSelection.keys("daily_yield_spread_and_macros")
+)
+
 daily_policy_rate_schedule = ScheduleDefinition(
     name="daily_policy_rate_schedule",
     cron_schedule="15 6 * * *",
@@ -26,4 +31,11 @@ daily_cpi_schedule = ScheduleDefinition(
     cron_schedule="15 7 * * *",
     execution_timezone="America/Toronto",
     job=daily_cpi_job
+)
+
+daily_yield_spread_and_macros_schedule = ScheduleDefinition(
+    name="daily_yield_spread_and_macros_schedule",
+    cron_schedule="15 8 * * *",
+    execution_timezone="America/Toronto",
+    job=daily_yield_spread_and_macros_job
 )

@@ -171,9 +171,18 @@ def daily_yield_spread_and_macros(context) -> pd.DataFrame:
         "unemploy":[unemploy],
     })
 
+    oil_str = f"{oil_val:.2f}" if oil_val is not None else "NA"
+    unemp_str = f"{unemploy:.2f}" if unemploy is not None else "NA"
+
     context.add_output_metadata({
-        "preview": (f"{date_str} | 2y={yields['y2']:.2f}% "
-                    f"10y={yields['y10']:.2f}% spread={spread:.2f} "
-                    f"oil={oil_val} unemploy={unemploy:.2f}")
+        "preview": (
+            f"{date_str} | y2={yields['y2']:.2f}, "
+            f"y5={yields['y5']:.2f}, "
+            f"y10={yields['y10']:.2f}, "
+            f"spread={spread:.2f}, "
+            f"oil={oil_str}, "
+            f"unemploy={unemp_str}"
+        )
     })
+
     return df

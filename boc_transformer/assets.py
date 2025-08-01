@@ -259,10 +259,9 @@ def daily_assemble_big_features(
                 "rows_needed": seq_len,
             },
         )
-        return {
-            "X": np.empty((0, seq_len, cols - 1), dtype=np.float32),
-            "Y": np.empty((0,), dtype=np.float32),
-        }
+        empty_X = np.empty((0, seq_len, cols - 1), dtype=np.float32)
+        empty_Y = np.empty((0,), dtype=np.float32)
+        return empty_X, empty_Y
 
     matrix = df.drop(columns="date").to_numpy(dtype=np.float32)
     X = np.stack([matrix[i : i + seq_len] for i in range(rows - seq_len)])

@@ -1,5 +1,5 @@
 from dagster import (
-    ScheduleDefinition,
+    build_schedule_from_partitioned_job,
     define_asset_job,
     AssetSelection,
 )
@@ -24,26 +24,26 @@ daily_features_job = define_asset_job(
     selection=AssetSelection.keys("X", "Y")
 )
 
-daily_policy_rate_schedule = ScheduleDefinition.from_job(
-    daily_policy_rate_job,
+daily_policy_rate_schedule = build_schedule_from_partitioned_job(
+    job=daily_policy_rate_job,
     cron_schedule="15 6 * * *",
     execution_timezone="America/Toronto",
 )
 
-daily_cpi_schedule = ScheduleDefinition.from_job(
-    daily_cpi_job,
+daily_cpi_schedule = build_schedule_from_partitioned_job(
+    job=daily_cpi_job,
     cron_schedule="15 7 * * *",
     execution_timezone="America/Toronto",
 )
 
-daily_yield_spread_and_macros_schedule = ScheduleDefinition.from_job(
-    daily_yield_spread_and_macros_job,
+daily_yield_spread_and_macros_schedule = build_schedule_from_partitioned_job(
+    job=daily_yield_spread_and_macros_job,
     cron_schedule="15 8 * * *",
     execution_timezone="America/Toronto",
 )
 
-daily_features_schedule = ScheduleDefinition.from_job(
-    daily_features_job,
+daily_features_schedule = build_schedule_from_partitioned_job(
+    job=daily_features_job,
     cron_schedule="15 10 * * *",
     execution_timezone="America/Toronto",
 )

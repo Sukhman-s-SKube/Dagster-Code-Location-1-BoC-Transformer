@@ -232,15 +232,17 @@ def daily_assemble_big_features(
     daily_policy_rate = _concat(daily_policy_rate)
     daily_cpi          = _concat(daily_cpi)
     daily_yield_spread_and_macros = _concat(daily_yield_spread_and_macros)
-
     df = (
         daily_policy_rate
         .merge(daily_cpi, on="date", how="outer")
         .merge(daily_yield_spread_and_macros, on="date", how="outer")
-        .sort_values("date")
-        .ffill()
-        .dropna()
+        .set_index("date")
     )
+
+    full_range = pd.date_range(end=context.partition_key, periods=seq_len, freq="D")
+    df = df.reindex(full_range).ffill()
+
+    df = df.dropna(subset=["rate", "cpi"]).reset_index().rename(columns={"index": "date"})
 
     seq_len = 90
     rows, cols = df.shape

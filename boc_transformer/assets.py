@@ -210,7 +210,7 @@ def daily_yield_spread_and_macros(context) -> pd.DataFrame:
             description="Feature tensor (N, 90, D)",
             metadata={"dtype": "float32"},
         ),
-        "y": AssetOut(
+        "Y": AssetOut(
             description="Target array (N,)",
             metadata={"dtype": "float32"},
         ),
@@ -261,12 +261,12 @@ def daily_assemble_big_features(
         )
         return {
             "X": np.empty((0, seq_len, cols - 1), dtype=np.float32),
-            "y": np.empty((0,), dtype=np.float32),
+            "Y": np.empty((0,), dtype=np.float32),
         }
 
     matrix = df.drop(columns="date").to_numpy(dtype=np.float32)
     X = np.stack([matrix[i : i + seq_len] for i in range(rows - seq_len)])
-    y = matrix[seq_len:, 0]
+    Y = matrix[seq_len:, 0]
 
     preview = (
         df.head(5)
@@ -289,4 +289,4 @@ def daily_assemble_big_features(
         },
     )
 
-    return {"X": X, "y": y}
+    return X, Y

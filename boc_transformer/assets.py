@@ -193,9 +193,12 @@ def daily_yield_spread_and_macros(context) -> pd.DataFrame:
 @multi_asset(
     partitions_def=DAILY,
     partition_mappings={
-        "daily_policy_rate": LastPartitionMapping(length=90),
-        "daily_cpi": LastPartitionMapping(length=90),
-        "daily_yield_spread_and_macros": LastPartitionMapping(length=90)
+        "daily_policy_rate": LastPartitionMapping(start_offset=-89,
+        end_offset=0),
+        "daily_cpi": LastPartitionMapping(start_offset=-89,
+        end_offset=0),
+        "daily_yield_spread_and_macros": LastPartitionMapping(start_offset=-89,
+        end_offset=0)
     },
     outs={
         "X": AssetOut(

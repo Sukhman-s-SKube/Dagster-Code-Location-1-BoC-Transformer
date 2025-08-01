@@ -195,13 +195,16 @@ def daily_yield_spread_and_macros(context) -> pd.DataFrame:
     partitions_def=DAILY,
     ins={
         "daily_policy_rate": AssetIn(
-            partition_mapping=TimeWindowPartitionMapping(start_offset=-89, end_offset=0)
+            partition_mapping=TimeWindowPartitionMapping(start_offset=-89, end_offset=0),
+            fan_in=True
         ),
         "daily_cpi": AssetIn(
-            partition_mapping=TimeWindowPartitionMapping(start_offset=-89, end_offset=0)
+            partition_mapping=TimeWindowPartitionMapping(start_offset=-89, end_offset=0),
+            fan_in=True
         ),
         "daily_yield_spread_and_macros": AssetIn(
-            partition_mapping=TimeWindowPartitionMapping(start_offset=-89, end_offset=0)
+            partition_mapping=TimeWindowPartitionMapping(start_offset=-89, end_offset=0),
+            fan_in=True
         ),
     },
     outs={

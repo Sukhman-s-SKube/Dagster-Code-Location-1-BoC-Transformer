@@ -228,9 +228,17 @@ def daily_assemble_big_features(
     daily_cpi: dict[str, pd.DataFrame],
     daily_yield_spread_and_macros: dict[str, pd.DataFrame],
 ):
-    def _concat(d):
-        return (pd.concat(d.values(), ignore_index=True).sort_values("date")
-                if d else pd.DataFrame(columns=["date"]))
+    def _concat(obj):
+        if obj is None:
+            return pd.DataFrame(columns=["date"])
+        if isinstance(obj, pd.DataFrame):
+            return obj.sort_values("date")
+        if isinstance(obj, dict) and obj:
+            return (
+                pd.concat(obj.values(), ignore_index=True)
+                .sort_values("date")
+            )
+        return pd.DataFrame(columns=["date"])
 
     df = (
         _concat(daily_policy_rate)
@@ -256,6 +264,8 @@ def daily_assemble_big_features(
     parquet_path = os.path.join(features_dir, f"{context.partition_key}.parquet")
     pq.write_table(pa.Table.from_pandas(df), parquet_path)
 
+    padded_days = int((full_range[0] - df['date'].min()).days)
+
     if windows_available == 0:
         context.add_output_metadata(
             output_name="X",
@@ -263,6 +273,8 @@ def daily_assemble_big_features(
                 "status":          "insufficient_history",
                 "rows_available":  rows,
                 "rows_needed":     SEQ_LEN + HORIZON,
+                "padded_days": padded_days,
+                "head_tail": pd.concat([df.head(3), df.tail(3)]).to_markdown(index=False)
             },
         )
         empty_shape = (0, SEQ_LEN, cols - 1)
@@ -285,6 +297,7 @@ def daily_assemble_big_features(
             "rate_std":       float(df["rate"].std()),
             "date_start":     str(df["date"].min().date()),
             "date_end":       str(df["date"].max().date()),
+            "padded_days": padded_days,
             "preview":        pd.concat([df.head(5), df.tail(5)]).to_markdown(index=False),
             "stats":          df.describe().to_markdown(),
         },

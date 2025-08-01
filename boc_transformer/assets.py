@@ -6,6 +6,7 @@ import requests
 from dagster import (
     asset,
     multi_asset,
+    AssetIn,
     AssetOut,
     DailyPartitionsDefinition,
     WeeklyPartitionsDefinition,
@@ -192,12 +193,16 @@ def daily_yield_spread_and_macros(context) -> pd.DataFrame:
 
 @multi_asset(
     partitions_def=DAILY,
-    partition_mappings={
-        "daily_policy_rate": TimeWindowPartitionMapping(start_offset=-89, end_offset=0),
-        "daily_cpi":          TimeWindowPartitionMapping(start_offset=-89, end_offset=0),
-        "daily_yield_spread_and_macros": TimeWindowPartitionMapping(
-            start_offset=-89, end_offset=0
-    ),
+    ins={
+        "daily_policy_rate": AssetIn(
+            partition_mapping=TimeWindowPartitionMapping(start_offset=-89, end_offset=0)
+        ),
+        "daily_cpi": AssetIn(
+            partition_mapping=TimeWindowPartitionMapping(start_offset=-89, end_offset=0)
+        ),
+        "daily_yield_spread_and_macros": AssetIn(
+            partition_mapping=TimeWindowPartitionMapping(start_offset=-89, end_offset=0)
+        ),
     },
     outs={
         "X": AssetOut(

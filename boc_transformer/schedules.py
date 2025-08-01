@@ -19,6 +19,11 @@ daily_yield_spread_and_macros_job = define_asset_job(
     selection=AssetSelection.keys("daily_yield_spread_and_macros")
 )
 
+daily_features_job = define_asset_job(
+    name="materialize_daily_features",
+    selection=AssetSelection.keys("daily_assemble_big_features"),
+)
+
 daily_policy_rate_schedule = ScheduleDefinition(
     name="daily_policy_rate_schedule",
     cron_schedule="15 6 * * *",
@@ -38,4 +43,11 @@ daily_yield_spread_and_macros_schedule = ScheduleDefinition(
     cron_schedule="15 8 * * *",
     execution_timezone="America/Toronto",
     job=daily_yield_spread_and_macros_job
+)
+
+daily_features_schedule = ScheduleDefinition(
+    name="daily_features_schedule",
+    cron_schedule="15 10 * * *",           # 08:00 America/Toronto
+    execution_timezone="America/Toronto",
+    job=daily_features_job,
 )

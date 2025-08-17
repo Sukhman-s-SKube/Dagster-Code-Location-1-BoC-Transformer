@@ -33,7 +33,7 @@ def demo_job():
 def tft_training_job():
     enqueue_tft_training()
 
-defs = Definitions(jobs=[demo_job, daily_policy_rate_job, daily_cpi_job, daily_yield_spread_and_macros_job, daily_features_job], 
+defs = Definitions(jobs=[demo_job, daily_policy_rate_job, daily_cpi_job, daily_yield_spread_and_macros_job, daily_features_job, tft_training_job], 
                    assets=[daily_policy_rate, daily_cpi, daily_yield_spread_and_macros, daily_assemble_big_features],
     resources={
         "s3": s3,

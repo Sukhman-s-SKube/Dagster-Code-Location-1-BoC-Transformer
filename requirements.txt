@@ -9,4 +9,3 @@ fredapi
 celery
 kubernetes
 pyarrow
-zoneinfo

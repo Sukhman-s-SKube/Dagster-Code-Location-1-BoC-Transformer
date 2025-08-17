@@ -1,9 +1,11 @@
 import os
 from dagster import job, op, Definitions
+from celery import Celery
 from dagster_aws.s3 import s3_pickle_io_manager, s3_resource
 from .assets import daily_policy_rate, daily_cpi, daily_yield_spread_and_macros, daily_assemble_big_features
 from .resources import fred_api, boc_api
 from .schedules import daily_policy_rate_schedule, daily_policy_rate_job, daily_cpi_job, daily_cpi_schedule, daily_yield_spread_and_macros_job, daily_yield_spread_and_macros_schedule, daily_features_job, daily_features_schedule
+from .ops import hello_world, enqueue_tft_training
 
 io_manager = s3_pickle_io_manager.configured({
     "s3_bucket":       {"env": "S3_BUCKET"},
@@ -18,13 +20,18 @@ s3 = s3_resource.configured(
     }
 )
 
-@op
-def hello_world():
-    return "Hello World!"
+broker = os.getenv("REDIS_BROKER_URL")
+backend = os.getenv("CELERY_BACKEND_URL")
+
+boc_forecaster_celery = Celery("enqueue", broker=broker, backend=backend)
 
 @job
 def demo_job():
     hello_world()
+
+@job
+def tft_training_job():
+    enqueue_tft_training()
 
 defs = Definitions(jobs=[demo_job, daily_policy_rate_job, daily_cpi_job, daily_yield_spread_and_macros_job, daily_features_job], 
                    assets=[daily_policy_rate, daily_cpi, daily_yield_spread_and_macros, daily_assemble_big_features],
@@ -32,5 +39,6 @@ defs = Definitions(jobs=[demo_job, daily_policy_rate_job, daily_cpi_job, daily_y
         "s3": s3,
         "io_manager": io_manager,
         "boc_api": boc_api.configured({"base_url": "https://www.bankofcanada.ca/valet"}),
-        "fred_api": fred_api.configured({"api_key": os.getenv("FRED_API_KEY")})
+        "fred_api": fred_api.configured({"api_key": os.getenv("FRED_API_KEY")}),
+        "boc_forecaster_celery" : boc_forecaster_celery
 }, schedules=[daily_policy_rate_schedule, daily_cpi_schedule, daily_yield_spread_and_macros_schedule, daily_features_schedule])

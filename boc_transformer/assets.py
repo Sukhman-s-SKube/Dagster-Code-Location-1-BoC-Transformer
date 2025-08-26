@@ -47,24 +47,83 @@ def fred_asof(fred, series: str, date_str: str, lookback_days: int = 720):
     group_name="raw_daily",
     tags={"layer": "raw", "source": "BoC"},
     metadata={
-        "frequency":    "daily",
-        "columns":      ["date", "rate"],
-        "series_id": "B114039",
-        "source_url":   "https://www.bankofcanada.ca/valet",
-        "unit":         "percent",
+        "frequency":  "daily (as-of; sparse updates)",
+        "columns":    ["date", "rate"],
+        "series_id":  "B114039",
+        "source_url": "https://www.bankofcanada.ca/valet",
+        "unit":       "percent",
     },
-    description="Daily 10-yr policy rate from BoC Valet.",
+    description="BoC policy rate (target for the overnight rate), exposed daily via logic.",
 )
 def daily_policy_rate(context) -> pd.DataFrame:
-    d = context.partition_key
-    base = context.resources.boc_api.base_url
-    # TODO: choose correct series for your intended target (policy rate vs 10y yield)
-    series = "CORRECT_SERIES_ID"  # replace!
-    val = valet_asof(base, series, d, 540)
-    if val is None:
-        context.log.warning(f"No as-of value for {series} up to {d}")
-        return pd.DataFrame(columns=["date","rate"])
-    return pd.DataFrame({"date":[pd.to_datetime(d)], "rate":[val]})
+    import requests
+    import pandas as pd
+
+    SERIES_ID = "B114039"
+    LOOKBACK_DAYS = 540
+
+    part_str = context.partition_key
+    part_dt = pd.to_datetime(part_str)
+    base = context.resources.boc_api.base_url.rstrip("/")
+
+    start_str = (part_dt - pd.Timedelta(days=LOOKBACK_DAYS)).date().isoformat()
+    end_str = part_dt.date().isoformat()
+
+    url = f"{base}/observations/{SERIES_ID}/json"
+    params = {"start_date": start_str, "end_date": end_str}
+    r = requests.get(url, params=params)
+
+    if r.status_code == 404:
+        raise RuntimeError(
+            f"BoC Valet 404 for series '{SERIES_ID}'. "
+            f"Check the series id and base_url: {url}"
+        )
+    r.raise_for_status()
+
+    data = r.json()
+    obs = data.get("observations", []) or []
+
+    asof_date = None
+    asof_val = None
+    for rec in reversed(obs):
+        cell = rec.get(SERIES_ID) or {}
+        v = cell.get("v")
+        if v not in (None, ""):
+            asof_val = float(v)
+            asof_date = pd.to_datetime(rec.get("d"))
+            break
+
+    if asof_val is None:
+        context.log.warning(
+            f"No '{SERIES_ID}' observations in {start_str}..{end_str}; "
+            "downstream will report insufficient_asof_history."
+        )
+        context.add_output_metadata(
+            {
+                "date": part_str,
+                "series_id": SERIES_ID,
+                "status": "no_data_in_lookback",
+                "lookback_days": LOOKBACK_DAYS,
+                "query_url": r.url,
+            }
+        )
+        return pd.DataFrame(columns=["date", "rate"])
+
+    staleness_days = int((part_dt.normalize() - asof_date.normalize()).days)
+    df = pd.DataFrame({"date": [part_dt], "rate": [asof_val]})
+
+    context.add_output_metadata(
+        {
+            "date": part_str,
+            "series_id": SERIES_ID,
+            "rate": asof_val,
+            "asof_date": asof_date.date().isoformat(),
+            "staleness_days": staleness_days,
+            "lookback_days": LOOKBACK_DAYS,
+            "preview": f"{part_str}: {asof_val:.2f}% (as-of {asof_date.date()}, {staleness_days}d stale)",
+        }
+    )
+    return df
 
 @asset(
     partitions_def=DAILY,

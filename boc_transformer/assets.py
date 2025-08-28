@@ -12,7 +12,7 @@ from dagster import (
     WeeklyPartitionsDefinition,
     TimeWindowPartitionMapping
 )
-from typing import Dict
+from typing import Dict, Tuple, Optional
 from fredapi import Fred
 
 DAILY = DailyPartitionsDefinition(start_date="2015-01-01")
@@ -33,6 +33,27 @@ def valet_asof(base_url: str, series: str, date_str: str, lookback_days: int = 5
         return None
     return float(obs[-1][series]["v"])
 
+def valet_asof_with_date(
+    base_url: str,
+    series: str,
+    date_str: str,
+    lookback_days: int = 540,
+) -> Tuple[Optional[float], Optional[pd.Timestamp], str]:
+    end = pd.to_datetime(date_str)
+    start = (end - pd.Timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+    url = f"{base_url.rstrip('/')}/observations/{series}/json"
+    r = requests.get(url, params={"start_date": start, "end_date": date_str}, timeout=20)
+    r.raise_for_status()
+    obs = r.json().get("observations", [])
+    if not obs:
+        return None, None, r.url
+    for rec in reversed(obs):
+        cell = rec.get(series) or {}
+        v = cell.get("v")
+        if v not in (None, ""):
+            return float(v), pd.to_datetime(rec.get("d")), r.url
+    return None, None, r.url
+
 def fred_asof(fred, series: str, date_str: str, lookback_days: int = 720):
     end = pd.to_datetime(date_str)
     start = end - pd.Timedelta(days=lookback_days)
@@ -40,6 +61,22 @@ def fred_asof(fred, series: str, date_str: str, lookback_days: int = 720):
     if s is None or s.empty:
         return None
     return float(pd.Series(s).dropna().iloc[-1])
+
+def fred_asof_with_date(
+    fred,
+    series: str,
+    date_str: str,
+    lookback_days: int = 720,
+) -> Tuple[Optional[float], Optional[pd.Timestamp]]:
+    end = pd.to_datetime(date_str)
+    start = end - pd.Timedelta(days=lookback_days)
+    s = fred.get_series(series, observation_start=start, observation_end=end)
+    if s is None or len(s) == 0:
+        return None, None
+    ser = pd.Series(s).dropna()
+    if ser.empty:
+        return None, None
+    return float(ser.iloc[-1]), pd.to_datetime(ser.index[-1])
 
 @asset(
     partitions_def=DAILY,
@@ -141,12 +178,45 @@ def daily_policy_rate(context) -> pd.DataFrame:
 )
 def daily_cpi(context) -> pd.DataFrame:
     d = context.partition_key
+    part_dt = pd.to_datetime(d)
     base = context.resources.boc_api.base_url
     series = "V41690973"
-    val = valet_asof(base, series, d, 540)
-    if val is None:
-        return pd.DataFrame(columns=["date","cpi"])
-    return pd.DataFrame({"date":[pd.to_datetime(d)], "cpi":[val]})
+
+    try:
+        val, asof_date, query_url = valet_asof_with_date(base, series, d, 540)
+    except requests.HTTPError as e:
+        raise RuntimeError(
+            f"BoC Valet error for series '{series}' while fetching CPI: {e}"
+        ) from e
+
+    if val is None or asof_date is None:
+        context.log.warning(
+            f"No '{series}' observations within lookback as-of {d}"
+        )
+        context.add_output_metadata(
+            {
+                "date": d,
+                "series_id": series,
+                "status": "no_data_in_lookback",
+                "lookback_days": 540,
+                "query_url": query_url,
+            }
+        )
+        return pd.DataFrame(columns=["date", "cpi"])
+
+    staleness_days = int((part_dt.normalize() - asof_date.normalize()).days)
+    context.add_output_metadata(
+        {
+            "date": d,
+            "series_id": series,
+            "cpi": val,
+            "asof_date": asof_date.date().isoformat(),
+            "staleness_days": staleness_days,
+            "lookback_days": 540,
+            "preview": f"{d}: CPI={val:.2f} (as-of {asof_date.date()}, {staleness_days}d stale)",
+        }
+    )
+    return pd.DataFrame({"date": [part_dt], "cpi": [val]})
 
 @asset(
     partitions_def=DAILY,
@@ -175,25 +245,77 @@ def daily_cpi(context) -> pd.DataFrame:
 )
 def daily_yield_spread_and_macros(context) -> pd.DataFrame:
     d    = context.partition_key
+    part_dt = pd.to_datetime(d)
     base = context.resources.boc_api.base_url
     fred = Fred(api_key=context.resources.fred_api)
 
-    y2  = valet_asof(base, "BD.CDN.2YR.DQ.YLD",  d, 540)
-    y5  = valet_asof(base, "BD.CDN.5YR.DQ.YLD",  d, 540)
-    y10 = valet_asof(base, "BD.CDN.10YR.DQ.YLD", d, 540)
-    oil = fred_asof(fred, "DCOILWTICO", d, 540)
-    un  = fred_asof(fred, "LRUNTTTTCAQ156S", d, 720)  # quarterly
+    y2, y2_date, y2_url   = valet_asof_with_date(base, "BD.CDN.2YR.DQ.YLD",  d, 540)
+    y5, y5_date, y5_url   = valet_asof_with_date(base, "BD.CDN.5YR.DQ.YLD",  d, 540)
+    y10, y10_date, y10_url = valet_asof_with_date(base, "BD.CDN.10YR.DQ.YLD", d, 540)
 
-    if any(v is None for v in (y2, y5, y10)):
-        context.log.warning(f"Missing yields as-of {d}")
+    oil, oil_date = fred_asof_with_date(fred, "DCOILWTICO", d, 540)
+    un, un_date   = fred_asof_with_date(fred, "LRUNTTTTCAQ156S", d, 720)  # quarterly
+
+    missing = [name for name, val in [("y2", y2), ("y5", y5), ("y10", y10)] if val is None]
+    if missing:
+        context.log.warning(f"Missing yields as-of {d}: {', '.join(missing)}")
+        context.add_output_metadata(
+            {
+                "date": d,
+                "status": "no_data_in_lookback",
+                "missing": missing,
+                "lookback_days": {"yields": 540, "oil": 540, "unemploy": 720},
+                "query_urls": {"y2": y2_url, "y5": y5_url, "y10": y10_url},
+            }
+        )
         return pd.DataFrame(columns=["date","y2","y5","y10","spread_2_10","oil","unemploy"])
 
     spread = y2 - y10
+
+    def _staleness(ad):
+        return None if ad is None else int((part_dt.normalize() - ad.normalize()).days)
+
+    staleness = {
+        "y2": _staleness(y2_date),
+        "y5": _staleness(y5_date),
+        "y10": _staleness(y10_date),
+        "oil": _staleness(oil_date),
+        "unemploy": _staleness(un_date),
+    }
+
+    context.add_output_metadata(
+        {
+            "date": d,
+            "values": {
+                "y2": y2,
+                "y5": y5,
+                "y10": y10,
+                "spread_2_10": spread,
+                "oil": oil,
+                "unemploy": un,
+            },
+            "asof_dates": {
+                "y2": None if y2_date is None else y2_date.date().isoformat(),
+                "y5": None if y5_date is None else y5_date.date().isoformat(),
+                "y10": None if y10_date is None else y10_date.date().isoformat(),
+                "oil": None if oil_date is None else oil_date.date().isoformat(),
+                "unemploy": None if un_date is None else un_date.date().isoformat(),
+            },
+            "staleness_days": staleness,
+            "lookback_days": {"yields": 540, "oil": 540, "unemploy": 720},
+            "preview": (
+                f"{d}: y2={y2:.3f}, y5={y5:.3f}, y10={y10:.3f}, "
+                f"spread={spread:.3f}; oil={oil if oil is not None else 'NA'}, "
+                f"un={un if un is not None else 'NA'}"
+            ),
+        }
+    )
+
     return pd.DataFrame({
-        "date":[pd.to_datetime(d)],
-        "y2":[y2],"y5":[y5],"y10":[y10],
-        "spread_2_10":[spread],
-        "oil":[oil],"unemploy":[un],
+        "date": [part_dt],
+        "y2": [y2], "y5": [y5], "y10": [y10],
+        "spread_2_10": [spread],
+        "oil": [oil], "unemploy": [un],
     })
 
 @multi_asset(

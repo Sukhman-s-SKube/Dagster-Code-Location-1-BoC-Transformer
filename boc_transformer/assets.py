@@ -388,6 +388,11 @@ def daily_assemble_big_features(
     rows, cols = df.shape
     windows_available = max((rows - SEQ_LEN - HORIZON) // STRIDE + 1, 0)
 
+    # Explicit alignment helpers for visibility
+    x_start_date = pd.to_datetime(full_range[0]).date() if len(full_range) else None
+    x_end_date = pd.to_datetime(full_range[SEQ_LEN - 1]).date() if len(full_range) >= SEQ_LEN else None
+    y_date = pd.to_datetime(full_range[SEQ_LEN + HORIZON - 1]).date() if len(full_range) >= (SEQ_LEN + HORIZON) else None
+
     if pd.isna(raw_first_date):
         padded_days = SEQ_LEN + HORIZON
     else:
@@ -412,6 +417,13 @@ def daily_assemble_big_features(
                 "ffill_only": True,
                 "head_tail": pd.concat([df.head(3), df.tail(3)], ignore_index=True).to_markdown(index=False),
                 "path": parquet_path,
+                "alignment": {
+                    "x_start": None if x_start_date is None else str(x_start_date),
+                    "x_end": None if x_end_date is None else str(x_end_date),
+                    "y_date": None if y_date is None else str(y_date),
+                    "horizon_days": HORIZON,
+                    "description": "Predicts y_date rate using features up to x_end (SEQ_LEN days ending HORIZON days before y_date).",
+                },
             },
         )
         empty_shape = (0, SEQ_LEN, len(feature_cols))
@@ -447,6 +459,13 @@ def daily_assemble_big_features(
             "ffill_only": True,
             "preview": pd.concat([df.head(5), df.tail(5)], ignore_index=True).to_markdown(index=False),
             "stats": df[feature_cols].describe().to_markdown(),
+            "alignment": {
+                "x_start": str(x_start_date),
+                "x_end": str(x_end_date),
+                "y_date": str(y_date),
+                "y_value": None if Y.size == 0 else float(Y[0]),
+                "description": "Predicts y_date rate using features up to x_end (7-day horizon).",
+            },
         },
     )
 

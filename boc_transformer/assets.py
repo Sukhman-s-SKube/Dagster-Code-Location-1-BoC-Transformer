@@ -1,4 +1,5 @@
 import os
+from datetime import date, timedelta
 import numpy as np
 import pandas as pd
 import pyarrow as pa, pyarrow.parquet as pq
@@ -21,6 +22,11 @@ WEEKLY = WeeklyPartitionsDefinition(start_date="2020-01-06")
 SEQ_LEN   = 90
 HORIZON   = 7
 STRIDE    = 1
+
+# Start features only when there is enough upstream history to satisfy the
+# TimeWindowPartitionMapping window (SEQ_LEN + HORIZON - 1 days back from target).
+FEATURES_START = (date.fromisoformat("2015-01-01") + timedelta(days=SEQ_LEN + HORIZON - 1)).isoformat()
+FEATURES_DAILY = DailyPartitionsDefinition(start_date=FEATURES_START)
 
 def valet_asof(base_url: str, series: str, date_str: str, lookback_days: int = 540):
     end = pd.to_datetime(date_str)
@@ -319,7 +325,7 @@ def daily_yield_spread_and_macros(context) -> pd.DataFrame:
     })
 
 @multi_asset(
-    partitions_def=DAILY,
+    partitions_def=FEATURES_DAILY,
     ins={
         "daily_policy_rate": AssetIn(
             partition_mapping=TimeWindowPartitionMapping(start_offset=-(SEQ_LEN+HORIZON-1),

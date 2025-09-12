@@ -83,8 +83,25 @@ def daily_yield_2y(context) -> pd.DataFrame:
     base = context.resources.boc_api.base_url
     val, asof_date, query_url = valet_asof_with_date(base, "BD.CDN.2YR.DQ.YLD", d, 540)
     if val is None:
-        context.add_output_metadata({"date": d, "series_id": "BD.CDN.2YR.DQ.YLD", "status": "no_data_in_lookback", "query_url": query_url})
+        context.add_output_metadata({
+            "date": d,
+            "series_id": "BD.CDN.2YR.DQ.YLD",
+            "status": "no_data_in_lookback",
+            "lookback_days": 540,
+            "query_url": query_url,
+        })
         return pd.DataFrame(columns=["date", "y2"])
+    staleness_days = None if asof_date is None else int((part_dt.normalize() - asof_date.normalize()).days)
+    context.add_output_metadata({
+        "date": d,
+        "series_id": "BD.CDN.2YR.DQ.YLD",
+        "y2": float(val),
+        "asof_date": None if asof_date is None else asof_date.date().isoformat(),
+        "staleness_days": staleness_days,
+        "lookback_days": 540,
+        "query_url": query_url,
+        "preview": f"{d}: y2={float(val):.3f} (as-of {None if asof_date is None else asof_date.date()}, {staleness_days}d stale)",
+    })
     return pd.DataFrame({"date": [part_dt], "y2": [float(val)]})
 
 @asset(
@@ -103,8 +120,25 @@ def daily_yield_5y(context) -> pd.DataFrame:
     base = context.resources.boc_api.base_url
     val, asof_date, query_url = valet_asof_with_date(base, "BD.CDN.5YR.DQ.YLD", d, 540)
     if val is None:
-        context.add_output_metadata({"date": d, "series_id": "BD.CDN.5YR.DQ.YLD", "status": "no_data_in_lookback", "query_url": query_url})
+        context.add_output_metadata({
+            "date": d,
+            "series_id": "BD.CDN.5YR.DQ.YLD",
+            "status": "no_data_in_lookback",
+            "lookback_days": 540,
+            "query_url": query_url,
+        })
         return pd.DataFrame(columns=["date", "y5"])
+    staleness_days = None if asof_date is None else int((part_dt.normalize() - asof_date.normalize()).days)
+    context.add_output_metadata({
+        "date": d,
+        "series_id": "BD.CDN.5YR.DQ.YLD",
+        "y5": float(val),
+        "asof_date": None if asof_date is None else asof_date.date().isoformat(),
+        "staleness_days": staleness_days,
+        "lookback_days": 540,
+        "query_url": query_url,
+        "preview": f"{d}: y5={float(val):.3f} (as-of {None if asof_date is None else asof_date.date()}, {staleness_days}d stale)",
+    })
     return pd.DataFrame({"date": [part_dt], "y5": [float(val)]})
 
 @asset(
@@ -123,8 +157,25 @@ def daily_yield_10y(context) -> pd.DataFrame:
     base = context.resources.boc_api.base_url
     val, asof_date, query_url = valet_asof_with_date(base, "BD.CDN.10YR.DQ.YLD", d, 540)
     if val is None:
-        context.add_output_metadata({"date": d, "series_id": "BD.CDN.10YR.DQ.YLD", "status": "no_data_in_lookback", "query_url": query_url})
+        context.add_output_metadata({
+            "date": d,
+            "series_id": "BD.CDN.10YR.DQ.YLD",
+            "status": "no_data_in_lookback",
+            "lookback_days": 540,
+            "query_url": query_url,
+        })
         return pd.DataFrame(columns=["date", "y10"])
+    staleness_days = None if asof_date is None else int((part_dt.normalize() - asof_date.normalize()).days)
+    context.add_output_metadata({
+        "date": d,
+        "series_id": "BD.CDN.10YR.DQ.YLD",
+        "y10": float(val),
+        "asof_date": None if asof_date is None else asof_date.date().isoformat(),
+        "staleness_days": staleness_days,
+        "lookback_days": 540,
+        "query_url": query_url,
+        "preview": f"{d}: y10={float(val):.3f} (as-of {None if asof_date is None else asof_date.date()}, {staleness_days}d stale)",
+    })
     return pd.DataFrame({"date": [part_dt], "y10": [float(val)]})
 
 @asset(
@@ -143,8 +194,23 @@ def daily_oil(context) -> pd.DataFrame:
     fred = Fred(api_key=context.resources.fred_api)
     val, asof_date = fred_asof_with_date(fred, "DCOILWTICO", d, 540)
     if val is None:
-        context.add_output_metadata({"date": d, "series_id": "DCOILWTICO", "status": "no_data_in_lookback"})
+        context.add_output_metadata({
+            "date": d,
+            "series_id": "DCOILWTICO",
+            "status": "no_data_in_lookback",
+            "lookback_days": 540,
+        })
         return pd.DataFrame(columns=["date", "oil"])
+    staleness_days = None if asof_date is None else int((part_dt.normalize() - asof_date.normalize()).days)
+    context.add_output_metadata({
+        "date": d,
+        "series_id": "DCOILWTICO",
+        "oil": float(val),
+        "asof_date": None if asof_date is None else asof_date.date().isoformat(),
+        "staleness_days": staleness_days,
+        "lookback_days": 540,
+        "preview": f"{d}: oil={float(val):.2f} (as-of {None if asof_date is None else asof_date.date()}, {staleness_days}d stale)",
+    })
     return pd.DataFrame({"date": [part_dt], "oil": [float(val)]})
 
 @asset(
@@ -163,8 +229,23 @@ def daily_unemployment(context) -> pd.DataFrame:
     fred = Fred(api_key=context.resources.fred_api)
     val, asof_date = fred_asof_with_date(fred, "LRUNTTTTCAQ156S", d, 720)
     if val is None:
-        context.add_output_metadata({"date": d, "series_id": "LRUNTTTTCAQ156S", "status": "no_data_in_lookback"})
+        context.add_output_metadata({
+            "date": d,
+            "series_id": "LRUNTTTTCAQ156S",
+            "status": "no_data_in_lookback",
+            "lookback_days": 720,
+        })
         return pd.DataFrame(columns=["date", "unemploy"])
+    staleness_days = None if asof_date is None else int((part_dt.normalize() - asof_date.normalize()).days)
+    context.add_output_metadata({
+        "date": d,
+        "series_id": "LRUNTTTTCAQ156S",
+        "unemploy": float(val),
+        "asof_date": None if asof_date is None else asof_date.date().isoformat(),
+        "staleness_days": staleness_days,
+        "lookback_days": 720,
+        "preview": f"{d}: unemploy={float(val):.2f}% (as-of {None if asof_date is None else asof_date.date()}, {staleness_days}d stale)",
+    })
     return pd.DataFrame({"date": [part_dt], "unemploy": [float(val)]})
 
 @asset(
@@ -352,4 +433,16 @@ def assemble_macro_daily_row(
     out["date"] = pd.to_datetime(out["date"])
     for c in ["rate", "cpi", "y2", "y5", "y10", "spread_2_10", "oil", "unemploy"]:
         out[c] = pd.to_numeric(out[c], errors="coerce").astype("float64")
+    # Emit observability metadata
+    vals = out.iloc[0].to_dict() if not out.empty else {}
+    missing = [k for k in ["rate", "cpi", "y2", "y5", "y10", "oil", "unemploy"] if (not vals) or pd.isna(vals.get(k))]
+    context.add_output_metadata({
+        "date": str(pd.to_datetime(context.partition_key).date()),
+        "missing_fields": missing,
+        "spread_2_10": None if not vals else vals.get("spread_2_10"),
+        "preview": None if not vals else (
+            f"rate={vals.get('rate')}, cpi={vals.get('cpi')}, y2={vals.get('y2')}, y10={vals.get('y10')}, "
+            f"spread={vals.get('spread_2_10')}, oil={vals.get('oil')}, un={vals.get('unemploy')}"
+        ),
+    })
     return out

@@ -1,5 +1,5 @@
 import os
-from dagster import resource, IOManager
+from dagster import resource, IOManager, io_manager
 import requests
 import pandas as pd
 import clickhouse_connect
@@ -56,7 +56,7 @@ def boc_api(context):
 def fred_api(context):
     return context.resource_config["api_key"]
 
-@resource
+@io_manager
 def clickhouse_macro_io_manager(_):
     return ClickHouseDailyRowIOManager(
         host=os.getenv("CH_HOST"),

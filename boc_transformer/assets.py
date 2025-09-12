@@ -1,32 +1,16 @@
 import os
 from datetime import date, timedelta
-import numpy as np
 import pandas as pd
-import pyarrow as pa, pyarrow.parquet as pq
 import requests
 from dagster import (
     asset,
-    multi_asset,
     AssetIn,
-    AssetOut,
     DailyPartitionsDefinition,
-    WeeklyPartitionsDefinition,
-    TimeWindowPartitionMapping
 )
 from typing import Dict, Tuple, Optional
 from fredapi import Fred
 
 DAILY = DailyPartitionsDefinition(start_date="2015-01-01")
-WEEKLY = WeeklyPartitionsDefinition(start_date="2020-01-06")
-
-SEQ_LEN   = 90
-HORIZON   = 7
-STRIDE    = 1
-
-# Start features only when there is enough upstream history to satisfy the
-# TimeWindowPartitionMapping window (SEQ_LEN + HORIZON - 1 days back from target).
-FEATURES_START = (date.fromisoformat("2015-01-01") + timedelta(days=SEQ_LEN + HORIZON - 1)).isoformat()
-FEATURES_DAILY = DailyPartitionsDefinition(start_date=FEATURES_START)
 
 def valet_asof(base_url: str, series: str, date_str: str, lookback_days: int = 540):
     end = pd.to_datetime(date_str)
@@ -83,6 +67,106 @@ def fred_asof_with_date(
     if ser.empty:
         return None, None
     return float(ser.iloc[-1]), pd.to_datetime(ser.index[-1])
+
+@asset(
+    partitions_def=DAILY,
+    required_resource_keys={"boc_api"},
+    group_name="raw_daily",
+    tags={"layer": "raw", "source": "BoC"},
+    metadata={
+        "columns": ["date", "y2"],
+        "series_id": "BD.CDN.2YR.DQ.YLD",
+    },
+)
+def daily_yield_2y(context) -> pd.DataFrame:
+    d = context.partition_key
+    part_dt = pd.to_datetime(d)
+    base = context.resources.boc_api.base_url
+    val, asof_date, query_url = valet_asof_with_date(base, "BD.CDN.2YR.DQ.YLD", d, 540)
+    if val is None:
+        context.add_output_metadata({"date": d, "series_id": "BD.CDN.2YR.DQ.YLD", "status": "no_data_in_lookback", "query_url": query_url})
+        return pd.DataFrame(columns=["date", "y2"])
+    return pd.DataFrame({"date": [part_dt], "y2": [float(val)]})
+
+@asset(
+    partitions_def=DAILY,
+    required_resource_keys={"boc_api"},
+    group_name="raw_daily",
+    tags={"layer": "raw", "source": "BoC"},
+    metadata={
+        "columns": ["date", "y5"],
+        "series_id": "BD.CDN.5YR.DQ.YLD",
+    },
+)
+def daily_yield_5y(context) -> pd.DataFrame:
+    d = context.partition_key
+    part_dt = pd.to_datetime(d)
+    base = context.resources.boc_api.base_url
+    val, asof_date, query_url = valet_asof_with_date(base, "BD.CDN.5YR.DQ.YLD", d, 540)
+    if val is None:
+        context.add_output_metadata({"date": d, "series_id": "BD.CDN.5YR.DQ.YLD", "status": "no_data_in_lookback", "query_url": query_url})
+        return pd.DataFrame(columns=["date", "y5"])
+    return pd.DataFrame({"date": [part_dt], "y5": [float(val)]})
+
+@asset(
+    partitions_def=DAILY,
+    required_resource_keys={"boc_api"},
+    group_name="raw_daily",
+    tags={"layer": "raw", "source": "BoC"},
+    metadata={
+        "columns": ["date", "y10"],
+        "series_id": "BD.CDN.10YR.DQ.YLD",
+    },
+)
+def daily_yield_10y(context) -> pd.DataFrame:
+    d = context.partition_key
+    part_dt = pd.to_datetime(d)
+    base = context.resources.boc_api.base_url
+    val, asof_date, query_url = valet_asof_with_date(base, "BD.CDN.10YR.DQ.YLD", d, 540)
+    if val is None:
+        context.add_output_metadata({"date": d, "series_id": "BD.CDN.10YR.DQ.YLD", "status": "no_data_in_lookback", "query_url": query_url})
+        return pd.DataFrame(columns=["date", "y10"])
+    return pd.DataFrame({"date": [part_dt], "y10": [float(val)]})
+
+@asset(
+    partitions_def=DAILY,
+    required_resource_keys={"fred_api"},
+    group_name="raw_daily",
+    tags={"layer": "raw", "source": "FRED"},
+    metadata={
+        "columns": ["date", "oil"],
+        "series_id": "DCOILWTICO",
+    },
+)
+def daily_oil(context) -> pd.DataFrame:
+    d = context.partition_key
+    part_dt = pd.to_datetime(d)
+    fred = Fred(api_key=context.resources.fred_api)
+    val, asof_date = fred_asof_with_date(fred, "DCOILWTICO", d, 540)
+    if val is None:
+        context.add_output_metadata({"date": d, "series_id": "DCOILWTICO", "status": "no_data_in_lookback"})
+        return pd.DataFrame(columns=["date", "oil"])
+    return pd.DataFrame({"date": [part_dt], "oil": [float(val)]})
+
+@asset(
+    partitions_def=DAILY,
+    required_resource_keys={"fred_api"},
+    group_name="raw_daily",
+    tags={"layer": "raw", "source": "FRED"},
+    metadata={
+        "columns": ["date", "unemploy"],
+        "series_id": "LRUNTTTTCAQ156S",
+    },
+)
+def daily_unemployment(context) -> pd.DataFrame:
+    d = context.partition_key
+    part_dt = pd.to_datetime(d)
+    fred = Fred(api_key=context.resources.fred_api)
+    val, asof_date = fred_asof_with_date(fred, "LRUNTTTTCAQ156S", d, 720)
+    if val is None:
+        context.add_output_metadata({"date": d, "series_id": "LRUNTTTTCAQ156S", "status": "no_data_in_lookback"})
+        return pd.DataFrame(columns=["date", "unemploy"])
+    return pd.DataFrame({"date": [part_dt], "unemploy": [float(val)]})
 
 @asset(
     partitions_def=DAILY,
@@ -226,253 +310,47 @@ def daily_cpi(context) -> pd.DataFrame:
 
 @asset(
     partitions_def=DAILY,
-    required_resource_keys={"boc_api", "fred_api"},
-    group_name="raw_daily",
-    tags={"layer": "raw", "source": "mixed"},
-    metadata={
-        "frequency": "daily (sparse)",
-        "columns": [
-            "date","y2","y5","y10","spread_2_10","oil","unemploy"
-        ],
-        "series_ids": {
-            "y2":"BD.CDN.2YR.DQ.YLD",
-            "y5":"BD.CDN.5YR.DQ.YLD",
-            "y10":"BD.CDN.10YR.DQ.YLD",
-            "oil":"DCOILWTICO",
-            "unemploy":"LRUNTTTTCAQ156S"
-        },
-        "unit": "percent (yields & unemploy), USD/barrel (oil)",
-    },
-    description=(
-        "Daily 2, 5, 10 yr GoC benchmark yields from BoC Valet"
-        "and their 2-10 spread. WTI spot price and Canadian unemployment "
-        "rate from FRED."
-    ),
-)
-def daily_yield_spread_and_macros(context) -> pd.DataFrame:
-    d    = context.partition_key
-    part_dt = pd.to_datetime(d)
-    base = context.resources.boc_api.base_url
-    fred = Fred(api_key=context.resources.fred_api)
-
-    y2, y2_date, y2_url   = valet_asof_with_date(base, "BD.CDN.2YR.DQ.YLD",  d, 540)
-    y5, y5_date, y5_url   = valet_asof_with_date(base, "BD.CDN.5YR.DQ.YLD",  d, 540)
-    y10, y10_date, y10_url = valet_asof_with_date(base, "BD.CDN.10YR.DQ.YLD", d, 540)
-
-    oil, oil_date = fred_asof_with_date(fred, "DCOILWTICO", d, 540)
-    un, un_date   = fred_asof_with_date(fred, "LRUNTTTTCAQ156S", d, 720)  # quarterly
-
-    missing = [name for name, val in [("y2", y2), ("y5", y5), ("y10", y10)] if val is None]
-    if missing:
-        context.log.warning(f"Missing yields as-of {d}: {', '.join(missing)}")
-        context.add_output_metadata(
-            {
-                "date": d,
-                "status": "no_data_in_lookback",
-                "missing": missing,
-                "lookback_days": {"yields": 540, "oil": 540, "unemploy": 720},
-                "query_urls": {"y2": y2_url, "y5": y5_url, "y10": y10_url},
-            }
-        )
-        return pd.DataFrame(columns=["date","y2","y5","y10","spread_2_10","oil","unemploy"])
-
-    spread = y2 - y10
-
-    def _staleness(ad):
-        return None if ad is None else int((part_dt.normalize() - ad.normalize()).days)
-
-    staleness = {
-        "y2": _staleness(y2_date),
-        "y5": _staleness(y5_date),
-        "y10": _staleness(y10_date),
-        "oil": _staleness(oil_date),
-        "unemploy": _staleness(un_date),
-    }
-
-    context.add_output_metadata(
-        {
-            "date": d,
-            "values": {
-                "y2": y2,
-                "y5": y5,
-                "y10": y10,
-                "spread_2_10": spread,
-                "oil": oil,
-                "unemploy": un,
-            },
-            "asof_dates": {
-                "y2": None if y2_date is None else y2_date.date().isoformat(),
-                "y5": None if y5_date is None else y5_date.date().isoformat(),
-                "y10": None if y10_date is None else y10_date.date().isoformat(),
-                "oil": None if oil_date is None else oil_date.date().isoformat(),
-                "unemploy": None if un_date is None else un_date.date().isoformat(),
-            },
-            "staleness_days": staleness,
-            "lookback_days": {"yields": 540, "oil": 540, "unemploy": 720},
-            "preview": (
-                f"{d}: y2={y2:.3f}, y5={y5:.3f}, y10={y10:.3f}, "
-                f"spread={spread:.3f}; oil={oil if oil is not None else 'NA'}, "
-                f"un={un if un is not None else 'NA'}"
-            ),
-        }
-    )
-
-    return pd.DataFrame({
-        "date": [part_dt],
-        "y2": [y2], "y5": [y5], "y10": [y10],
-        "spread_2_10": [spread],
-        "oil": [oil], "unemploy": [un],
-    })
-
-@multi_asset(
-    partitions_def=FEATURES_DAILY,
     ins={
-        "daily_policy_rate": AssetIn(
-            partition_mapping=TimeWindowPartitionMapping(start_offset=-(SEQ_LEN+HORIZON-1),
-                                                         end_offset=0)
-        ),
-        "daily_cpi": AssetIn(
-            partition_mapping=TimeWindowPartitionMapping(start_offset=-(SEQ_LEN+HORIZON-1),
-                                                         end_offset=0)
-        ),
-        "daily_yield_spread_and_macros": AssetIn(
-            partition_mapping=TimeWindowPartitionMapping(start_offset=-(SEQ_LEN+HORIZON-1),
-                                                         end_offset=0)
-        ),
+        "daily_policy_rate": AssetIn(),
+        "daily_cpi": AssetIn(),
+        "daily_yield_2y": AssetIn(),
+        "daily_yield_5y": AssetIn(),
+        "daily_yield_10y": AssetIn(),
+        "daily_oil": AssetIn(),
+        "daily_unemployment": AssetIn(),
     },
-    outs={
-        "X": AssetOut(description=f"N×{SEQ_LEN}×D feature tensor", metadata={"dtype": "float32"}),
-        "Y": AssetOut(description="Nlength target array",        metadata={"dtype": "float32"}),
-    },
+    io_manager_key="clickhouse_macro_io_manager",
     group_name="features",
-    description=(
-        f"Sliding-window {SEQ_LEN}-day feature/target pairs with a {HORIZON} day "
-        "forecast horizon."
-    ),
 )
-def daily_assemble_big_features(
+def assemble_macro_daily_row(
     context,
-    daily_policy_rate: dict[str, pd.DataFrame],
-    daily_cpi: dict[str, pd.DataFrame],
-    daily_yield_spread_and_macros: dict[str, pd.DataFrame],
-):
-    def _concat(obj: pd.DataFrame | dict[str, pd.DataFrame] | None) -> pd.DataFrame:
-        if obj is None:
-            return pd.DataFrame(columns=["date"])
-        if isinstance(obj, pd.DataFrame):
-            return obj.sort_values("date")
-        if isinstance(obj, dict) and obj:
-            return pd.concat(obj.values(), ignore_index=True).sort_values("date")
-        return pd.DataFrame(columns=["date"])
-    
-    raw = (
-        _concat(daily_policy_rate)
-        .merge(_concat(daily_cpi), on="date", how="outer")
-        .merge(_concat(daily_yield_spread_and_macros), on="date", how="outer")
-        .sort_values("date")
-        .set_index("date")
-    )
+    daily_policy_rate: pd.DataFrame,
+    daily_cpi: pd.DataFrame,
+    daily_yield_2y: pd.DataFrame,
+    daily_yield_5y: pd.DataFrame,
+    daily_yield_10y: pd.DataFrame,
+    daily_oil: pd.DataFrame,
+    daily_unemployment: pd.DataFrame,
+) -> pd.DataFrame:
+    d = pd.to_datetime(context.partition_key)
+    row = pd.DataFrame({"date": [d]})
 
-    raw_first_date = raw.index.min() if not raw.empty else pd.NaT
+    def merge(base_df: Optional[pd.DataFrame], cols: list[str]):
+        nonlocal row
+        base = pd.DataFrame(columns=["date"] + cols) if base_df is None or base_df.empty else base_df[["date"] + cols]
+        row = row.merge(base, on="date", how="left")
 
-    full_range = pd.date_range(end=context.partition_key, periods=SEQ_LEN + HORIZON, freq="D")
-    df = (
-        raw.reindex(full_range)   # align to exact window
-           .ffill()               # forward-fill only (NO bfill to avoid leakage)
-           .reset_index()
-           .rename(columns={"index": "date"})
-    )
+    merge(daily_policy_rate, ["rate"])
+    merge(daily_cpi, ["cpi"])
+    merge(daily_yield_2y, ["y2"])
+    merge(daily_yield_5y, ["y5"])
+    merge(daily_yield_10y, ["y10"])
+    merge(daily_oil, ["oil"])
+    merge(daily_unemployment, ["unemploy"])
 
-    feature_cols = [c for c in df.columns if c != "date"]
-    y_col = "rate"
-    if y_col not in feature_cols:
-        raise ValueError(f"Target column '{y_col}' not found in assembled dataframe. Got: {feature_cols}")
-
-    nan_counts = df[feature_cols].isna().sum().to_dict()
-    has_nan = any(v > 0 for v in nan_counts.values())
-
-    rows, cols = df.shape
-    windows_available = max((rows - SEQ_LEN - HORIZON) // STRIDE + 1, 0)
-
-    # Explicit alignment helpers for visibility
-    x_start_date = pd.to_datetime(full_range[0]).date() if len(full_range) else None
-    x_end_date = pd.to_datetime(full_range[SEQ_LEN - 1]).date() if len(full_range) >= SEQ_LEN else None
-    y_date = pd.to_datetime(full_range[SEQ_LEN + HORIZON - 1]).date() if len(full_range) >= (SEQ_LEN + HORIZON) else None
-
-    if pd.isna(raw_first_date):
-        padded_days = SEQ_LEN + HORIZON
-    else:
-        padded_days = max(0, int((full_range[0] - raw_first_date).days))
-
-    features_dir = os.path.join(context.instance.storage_directory(), "features")
-    os.makedirs(features_dir, exist_ok=True)
-    parquet_path = os.path.join(features_dir, f"{context.partition_key}.parquet")
-    pq.write_table(pa.Table.from_pandas(df), parquet_path)
-
-    if windows_available == 0 or has_nan:
-        context.add_output_metadata(
-            output_name="X",
-            metadata={
-                "status": "insufficient_history" if not has_nan else "insufficient_asof_history",
-                "rows_available": rows,
-                "rows_needed": SEQ_LEN + HORIZON,
-                "padded_days": int(padded_days),
-                "nan_counts": {k: int(v) for k, v in nan_counts.items()},
-                "columns": feature_cols,
-                "y_col": y_col,
-                "ffill_only": True,
-                "head_tail": pd.concat([df.head(3), df.tail(3)], ignore_index=True).to_markdown(index=False),
-                "path": parquet_path,
-                "alignment": {
-                    "x_start": None if x_start_date is None else str(x_start_date),
-                    "x_end": None if x_end_date is None else str(x_end_date),
-                    "y_date": None if y_date is None else str(y_date),
-                    "horizon_days": HORIZON,
-                    "description": "Predicts y_date rate using features up to x_end (SEQ_LEN days ending HORIZON days before y_date).",
-                },
-            },
-        )
-        empty_shape = (0, SEQ_LEN, len(feature_cols))
-        return np.empty(empty_shape, np.float32), np.empty((0,), np.float32)
-
-
-    feat_df = df.drop(columns="date")
-    matrix = feat_df.to_numpy(dtype=np.float32)
-    y_idx = feat_df.columns.get_loc(y_col)
-
-    idx = range(0, rows - SEQ_LEN - HORIZON + 1, STRIDE)
-    X = np.stack([matrix[i : i + SEQ_LEN] for i in idx]).astype(np.float32, copy=False)
-    Y = np.stack([matrix[i + SEQ_LEN + HORIZON - 1, y_idx] for i in idx]).astype(np.float32, copy=False)
-
-    if not np.isfinite(Y).all():
-        raise ValueError("Non-finite values found in Y after assembly. Check source assets and ffill window.")
-
-
-    context.add_output_metadata(
-        output_name="X",
-        metadata={
-            "path": parquet_path,
-            "rows": rows,
-            "cols": len(feature_cols),
-            "columns": feature_cols,
-            "y_col": y_col,
-            "windows": int(X.shape[0]),
-            "horizon_days": HORIZON,
-            "rate_std": float(df[y_col].std(skipna=True)),
-            "date_start": str(df["date"].min().date()),
-            "date_end": str(df["date"].max().date()),
-            "padded_days": int(padded_days),
-            "ffill_only": True,
-            "preview": pd.concat([df.head(5), df.tail(5)], ignore_index=True).to_markdown(index=False),
-            "stats": df[feature_cols].describe().to_markdown(),
-            "alignment": {
-                "x_start": str(x_start_date),
-                "x_end": str(x_end_date),
-                "y_date": str(y_date),
-                "y_value": None if Y.size == 0 else float(Y[0]),
-                "description": "Predicts y_date rate using features up to x_end (7-day horizon).",
-            },
-        },
-    )
-
-    return X, Y
+    row["spread_2_10"] = row["y2"] - row["y10"]
+    out = row[["date", "rate", "cpi", "y2", "y5", "y10", "spread_2_10", "oil", "unemploy"]].copy()
+    out["date"] = pd.to_datetime(out["date"])
+    for c in ["rate", "cpi", "y2", "y5", "y10", "spread_2_10", "oil", "unemploy"]:
+        out[c] = pd.to_numeric(out[c], errors="coerce").astype("float64")
+    return out

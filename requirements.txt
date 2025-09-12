@@ -10,3 +10,4 @@ celery
 kubernetes
 pyarrow
 redis
+clickhouse-connect

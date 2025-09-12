@@ -1,10 +1,37 @@
 import os
-from dagster import job, op, Definitions
+from dagster import job, Definitions
 from celery import Celery
 from dagster_aws.s3 import s3_pickle_io_manager, s3_resource
-from .assets import daily_policy_rate, daily_cpi, daily_yield_spread_and_macros, daily_assemble_big_features
-from .resources import fred_api, boc_api
-from .schedules import daily_policy_rate_schedule, daily_policy_rate_job, daily_cpi_job, daily_cpi_schedule, daily_yield_spread_and_macros_job, daily_yield_spread_and_macros_schedule, daily_features_job, daily_features_schedule
+
+from .assets import (
+    daily_policy_rate,
+    daily_cpi,
+    daily_yield_2y,
+    daily_yield_5y,
+    daily_yield_10y,
+    daily_oil,
+    daily_unemployment,
+    assemble_macro_daily_row,
+)
+from .resources import fred_api, boc_api, clickhouse_macro_io_manager
+from .schedules import (
+    daily_policy_rate_schedule,
+    daily_policy_rate_job,
+    daily_cpi_schedule,
+    daily_cpi_job,
+    daily_yield_2y_schedule,
+    daily_yield_2y_job,
+    daily_yield_5y_schedule,
+    daily_yield_5y_job,
+    daily_yield_10y_schedule,
+    daily_yield_10y_job,
+    daily_oil_schedule,
+    daily_oil_job,
+    daily_unemployment_schedule,
+    daily_unemployment_job,
+    assemble_macro_daily_schedule,
+    assemble_macro_daily_job,
+)
 from .ops import hello_world, enqueue_tft_training
 
 io_manager = s3_pickle_io_manager.configured({
@@ -33,12 +60,45 @@ def demo_job():
 def tft_training_job():
     enqueue_tft_training()
 
-defs = Definitions(jobs=[demo_job, daily_policy_rate_job, daily_cpi_job, daily_yield_spread_and_macros_job, daily_features_job, tft_training_job], 
-                   assets=[daily_policy_rate, daily_cpi, daily_yield_spread_and_macros, daily_assemble_big_features],
+defs = Definitions(
+    jobs=[
+        demo_job,
+        tft_training_job,
+        daily_policy_rate_job,
+        daily_cpi_job,
+        daily_yield_2y_job,
+        daily_yield_5y_job,
+        daily_yield_10y_job,
+        daily_oil_job,
+        daily_unemployment_job,
+        assemble_macro_daily_job,
+    ],
+    assets=[
+        daily_policy_rate,
+        daily_cpi,
+        daily_yield_2y,
+        daily_yield_5y,
+        daily_yield_10y,
+        daily_oil,
+        daily_unemployment,
+        assemble_macro_daily_row,
+    ],
     resources={
         "s3": s3,
         "io_manager": io_manager,
         "boc_api": boc_api.configured({"base_url": "https://www.bankofcanada.ca/valet"}),
         "fred_api": fred_api.configured({"api_key": os.getenv("FRED_API_KEY")}),
-        "boc_forecaster_celery" : boc_forecaster_celery
-}, schedules=[daily_policy_rate_schedule, daily_cpi_schedule, daily_yield_spread_and_macros_schedule, daily_features_schedule])
+        "clickhouse_macro_io_manager": clickhouse_macro_io_manager,
+        "boc_forecaster_celery": boc_forecaster_celery,
+    },
+    schedules=[
+        daily_policy_rate_schedule,
+        daily_cpi_schedule,
+        daily_yield_2y_schedule,
+        daily_yield_5y_schedule,
+        daily_yield_10y_schedule,
+        daily_oil_schedule,
+        daily_unemployment_schedule,
+        assemble_macro_daily_schedule,
+    ],
+)

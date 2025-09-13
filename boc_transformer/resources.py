@@ -13,7 +13,10 @@ class ClickHouseDailyRowIOManager(IOManager):
         self.database = database
         self.table = table
         self.client = clickhouse_connect.get_client(
-            host=host, port=port, username=username, password=password, database=database
+            host=host,
+            port=port,
+            username=username,
+            password=password,
         )
 
     def handle_output(self, context, obj: pd.DataFrame):
@@ -46,6 +49,20 @@ class ClickHouseDailyRowIOManager(IOManager):
         self.client.insert_df(f"{self.database}.{self.table}", df)
 
     def load_input(self, context):
+        self.client.command(f"CREATE DATABASE IF NOT EXISTS {self.database}")
+        self.client.command(
+            f"""
+            CREATE TABLE IF NOT EXISTS {self.database}.{self.table} (
+              date Date,
+              rate Float64, cpi Float64,
+              y2 Float64, y5 Float64, y10 Float64,
+              spread_2_10 Float64, oil Float64, unemploy Float64
+            ) ENGINE=MergeTree
+            PARTITION BY toYYYYMM(date)
+            ORDER BY date
+            """
+        )
+
         pk = None
         if hasattr(context, "asset_partition_key"):
             pk = context.asset_partition_key

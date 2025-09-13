@@ -17,7 +17,6 @@ class ClickHouseDailyRowIOManager(IOManager):
         )
 
     def handle_output(self, context, obj: pd.DataFrame):
-        # Ensure database and table exist (run idempotently)
         self.client.command(f"CREATE DATABASE IF NOT EXISTS {self.database}")
         self.client.command(
             f"""
@@ -45,6 +44,52 @@ class ClickHouseDailyRowIOManager(IOManager):
         )
 
         self.client.insert_df(f"{self.database}.{self.table}", df)
+
+    def load_input(self, context):
+        pk = None
+        if hasattr(context, "asset_partition_key"):
+            pk = context.asset_partition_key
+        if pk is None and getattr(context, "upstream_output", None) is not None:
+            pk = getattr(context.upstream_output, "partition_key", None)
+        if pk is None and hasattr(context, "partition_key"):
+            pk = context.partition_key
+
+        if not pk:
+            return pd.DataFrame(
+                columns=[
+                    "date",
+                    "rate",
+                    "cpi",
+                    "y2",
+                    "y5",
+                    "y10",
+                    "spread_2_10",
+                    "oil",
+                    "unemploy",
+                ]
+            )
+
+        query = (
+            f"SELECT date, rate, cpi, y2, y5, y10, spread_2_10, oil, unemploy "
+            f"FROM {self.database}.{self.table} "
+            f"WHERE date = toDate(%(d)s)"
+        )
+
+        df = self.client.query_df(query, parameters={"d": pk})
+        if not df.empty:
+            df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
+            for c in [
+                "rate",
+                "cpi",
+                "y2",
+                "y5",
+                "y10",
+                "spread_2_10",
+                "oil",
+                "unemploy",
+            ]:
+                df[c] = pd.to_numeric(df[c], errors="coerce").astype("float64")
+        return df
 
 @resource(config_schema={"base_url": str})
 def boc_api(context):

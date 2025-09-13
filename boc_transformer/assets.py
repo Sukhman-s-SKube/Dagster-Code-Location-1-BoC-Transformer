@@ -433,7 +433,6 @@ def assemble_macro_daily_row(
     out["date"] = pd.to_datetime(out["date"])
     for c in ["rate", "cpi", "y2", "y5", "y10", "spread_2_10", "oil", "unemploy"]:
         out[c] = pd.to_numeric(out[c], errors="coerce").astype("float64")
-    # Emit observability metadata
     vals = out.iloc[0].to_dict() if not out.empty else {}
     missing = [k for k in ["rate", "cpi", "y2", "y5", "y10", "oil", "unemploy"] if (not vals) or pd.isna(vals.get(k))]
     context.add_output_metadata({

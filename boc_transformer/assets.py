@@ -11,7 +11,7 @@ from fredapi import Fred
 
 DAILY = DailyPartitionsDefinition(start_date="2015-01-01")
 
-def valet_asof(base_url: str, series: str, date_str: str, lookback_days: int = 540):
+def valet_asof(base_url: str, series: str, date_str: str, lookback_days: int = 1080):
     end = pd.to_datetime(date_str)
     start = (end - pd.Timedelta(days=lookback_days)).strftime("%Y-%m-%d")
     r = requests.get(f"{base_url.rstrip('/')}/observations/{series}/json",
@@ -26,7 +26,7 @@ def valet_asof_with_date(
     base_url: str,
     series: str,
     date_str: str,
-    lookback_days: int = 540,
+    lookback_days: int = 1080,
 ) -> Tuple[Optional[float], Optional[pd.Timestamp], str]:
     end = pd.to_datetime(date_str)
     start = (end - pd.Timedelta(days=lookback_days)).strftime("%Y-%m-%d")
@@ -81,13 +81,13 @@ def daily_yield_2y(context) -> pd.DataFrame:
     d = context.partition_key
     part_dt = pd.to_datetime(d)
     base = context.resources.boc_api.base_url
-    val, asof_date, query_url = valet_asof_with_date(base, "BD.CDN.2YR.DQ.YLD", d, 540)
+    val, asof_date, query_url = valet_asof_with_date(base, "BD.CDN.2YR.DQ.YLD", d, 1080)
     if val is None:
         context.add_output_metadata({
             "date": d,
             "series_id": "BD.CDN.2YR.DQ.YLD",
             "status": "no_data_in_lookback",
-            "lookback_days": 540,
+            "lookback_days": 1080,
             "query_url": query_url,
         })
         return pd.DataFrame(columns=["date", "y2"])
@@ -98,7 +98,7 @@ def daily_yield_2y(context) -> pd.DataFrame:
         "y2": float(val),
         "asof_date": None if asof_date is None else asof_date.date().isoformat(),
         "staleness_days": staleness_days,
-        "lookback_days": 540,
+        "lookback_days": 1080,
         "query_url": query_url,
         "preview": f"{d}: y2={float(val):.3f} (as-of {None if asof_date is None else asof_date.date()}, {staleness_days}d stale)",
     })
@@ -118,13 +118,13 @@ def daily_yield_5y(context) -> pd.DataFrame:
     d = context.partition_key
     part_dt = pd.to_datetime(d)
     base = context.resources.boc_api.base_url
-    val, asof_date, query_url = valet_asof_with_date(base, "BD.CDN.5YR.DQ.YLD", d, 540)
+    val, asof_date, query_url = valet_asof_with_date(base, "BD.CDN.5YR.DQ.YLD", d, 1080)
     if val is None:
         context.add_output_metadata({
             "date": d,
             "series_id": "BD.CDN.5YR.DQ.YLD",
             "status": "no_data_in_lookback",
-            "lookback_days": 540,
+            "lookback_days": 1080,
             "query_url": query_url,
         })
         return pd.DataFrame(columns=["date", "y5"])
@@ -135,7 +135,7 @@ def daily_yield_5y(context) -> pd.DataFrame:
         "y5": float(val),
         "asof_date": None if asof_date is None else asof_date.date().isoformat(),
         "staleness_days": staleness_days,
-        "lookback_days": 540,
+        "lookback_days": 1080,
         "query_url": query_url,
         "preview": f"{d}: y5={float(val):.3f} (as-of {None if asof_date is None else asof_date.date()}, {staleness_days}d stale)",
     })
@@ -155,13 +155,13 @@ def daily_yield_10y(context) -> pd.DataFrame:
     d = context.partition_key
     part_dt = pd.to_datetime(d)
     base = context.resources.boc_api.base_url
-    val, asof_date, query_url = valet_asof_with_date(base, "BD.CDN.10YR.DQ.YLD", d, 540)
+    val, asof_date, query_url = valet_asof_with_date(base, "BD.CDN.10YR.DQ.YLD", d, 1080)
     if val is None:
         context.add_output_metadata({
             "date": d,
             "series_id": "BD.CDN.10YR.DQ.YLD",
             "status": "no_data_in_lookback",
-            "lookback_days": 540,
+            "lookback_days": 1080,
             "query_url": query_url,
         })
         return pd.DataFrame(columns=["date", "y10"])
@@ -172,7 +172,7 @@ def daily_yield_10y(context) -> pd.DataFrame:
         "y10": float(val),
         "asof_date": None if asof_date is None else asof_date.date().isoformat(),
         "staleness_days": staleness_days,
-        "lookback_days": 540,
+        "lookback_days": 1080,
         "query_url": query_url,
         "preview": f"{d}: y10={float(val):.3f} (as-of {None if asof_date is None else asof_date.date()}, {staleness_days}d stale)",
     })
@@ -192,13 +192,13 @@ def daily_oil(context) -> pd.DataFrame:
     d = context.partition_key
     part_dt = pd.to_datetime(d)
     fred = Fred(api_key=context.resources.fred_api)
-    val, asof_date = fred_asof_with_date(fred, "DCOILWTICO", d, 540)
+    val, asof_date = fred_asof_with_date(fred, "DCOILWTICO", d, 1080)
     if val is None:
         context.add_output_metadata({
             "date": d,
             "series_id": "DCOILWTICO",
             "status": "no_data_in_lookback",
-            "lookback_days": 540,
+            "lookback_days": 1080,
         })
         return pd.DataFrame(columns=["date", "oil"])
     staleness_days = None if asof_date is None else int((part_dt.normalize() - asof_date.normalize()).days)
@@ -208,7 +208,7 @@ def daily_oil(context) -> pd.DataFrame:
         "oil": float(val),
         "asof_date": None if asof_date is None else asof_date.date().isoformat(),
         "staleness_days": staleness_days,
-        "lookback_days": 540,
+        "lookback_days": 1080,
         "preview": f"{d}: oil={float(val):.2f} (as-of {None if asof_date is None else asof_date.date()}, {staleness_days}d stale)",
     })
     return pd.DataFrame({"date": [part_dt], "oil": [float(val)]})
@@ -267,7 +267,7 @@ def daily_policy_rate(context) -> pd.DataFrame:
     import pandas as pd
 
     SERIES_ID = "B114039"
-    LOOKBACK_DAYS = 540
+    LOOKBACK_DAYS = 1080
 
     part_str = context.partition_key
     part_dt = pd.to_datetime(part_str)
@@ -353,7 +353,7 @@ def daily_cpi(context) -> pd.DataFrame:
     series = "V41690973"
 
     try:
-        val, asof_date, query_url = valet_asof_with_date(base, series, d, 540)
+        val, asof_date, query_url = valet_asof_with_date(base, series, d, 1080)
     except requests.HTTPError as e:
         raise RuntimeError(
             f"BoC Valet error for series '{series}' while fetching CPI: {e}"
@@ -368,7 +368,7 @@ def daily_cpi(context) -> pd.DataFrame:
                 "date": d,
                 "series_id": series,
                 "status": "no_data_in_lookback",
-                "lookback_days": 540,
+                "lookback_days": 1080,
                 "query_url": query_url,
             }
         )
@@ -382,7 +382,7 @@ def daily_cpi(context) -> pd.DataFrame:
             "cpi": val,
             "asof_date": asof_date.date().isoformat(),
             "staleness_days": staleness_days,
-            "lookback_days": 540,
+            "lookback_days": 1080,
             "preview": f"{d}: CPI={val:.2f} (as-of {asof_date.date()}, {staleness_days}d stale)",
         }
     )

@@ -1,7 +1,7 @@
 import os
 from dagster import job, op, Definitions, Field
 from dagster_aws.s3 import s3_pickle_io_manager, s3_resource
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from zoneinfo import ZoneInfo
 
@@ -27,7 +27,7 @@ def hello_world():
 def xg_boost_predict_today(context):
     cfg = context.op_config
     tz = ZoneInfo("America/Toronto")
-    date_str = datetime.now(tz=tz).date().isoformat()
+    date_str = (datetime.now(tz=tz) - timedelta(days=1)).date().isoformat()
 
     payload = {
         "model_bucket": cfg["model_bucket"],
@@ -39,7 +39,7 @@ def xg_boost_predict_today(context):
     app = context.resources.boc_forecaster_celery
     result = app.send_task("trainer.predict_xgb_from_io", kwargs=payload)
     context.log.info(
-        f"Enqueued XGB prediction for {date_str} with payload={payload} task_id={result.id}"
+        f"Enqueued XGB prediction for {date_str} (yesterday) with payload={payload} task_id={result.id}"
     )
     return {"task_id": result.id, "date": date_str}
 
@@ -76,15 +76,15 @@ def xg_boost_evaluate_recent(context):
 
 @op(
     config_schema={
-        "seq_len": int,          #e.g., 90
-        "horizon": int,          #e.g., 30
-        "model_bucket": str,     #e.g., "models"
-        "model_prefix": str,     #e.g., "boc_policy_classifier"
+        "seq_len": int,          #e.g. 90
+        "horizon": int,          #e.g. 30
+        "model_bucket": str,     #e.g. "models"
+        "model_prefix": str,     #e.g. "boc_policy_classifier"
         #optional controls
         "start_date": Field(str, is_required=False, default_value=""),           #ISO date
         "cap_date": Field(str, is_required=False, default_value=""),             #ISO date; default computed
-        "val_holdout_days": Field(int, is_required=False, default_value=0),       # 0 worker default
-        "recency_half_life_days": Field(int, is_required=False, default_value=0), # 0 disabled
+        "val_holdout_days": Field(int, is_required=False, default_value=0),       #0 worker default
+        "recency_half_life_days": Field(int, is_required=False, default_value=0), #0 disabled
     },
     required_resource_keys={"boc_forecaster_celery"},
 )

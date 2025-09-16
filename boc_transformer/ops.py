@@ -18,6 +18,53 @@ def hello_world():
 
 @op(
     config_schema={
+        # core XGBoost training params
+        "seq_len": int,          # e.g., 90
+        "horizon": int,          # e.g., 30
+        "model_bucket": str,     # e.g., "models"
+        "model_prefix": str,     # e.g., "boc_policy_classifier"
+        # optional controls
+        "start_date": Field(str, is_required=False, default_value=""),           # ISO date
+        "cap_date": Field(str, is_required=False, default_value=""),             # ISO date; default computed
+        "val_holdout_days": Field(int, is_required=False, default_value=0),       # 0 => worker default
+        "recency_half_life_days": Field(int, is_required=False, default_value=0), # 0 => disabled
+    },
+    required_resource_keys={"boc_forecaster_celery"},
+)
+def xg_boost_train(context):
+    """Enqueue XGBoost training on the new trainer worker.
+
+    This op replaces the old TFT training op. It trains a multi-class
+    policy-rate classifier using engineered features from ClickHouse.
+    """
+    cfg = context.op_config
+
+    cap_date = cfg.get("cap_date") or _cap_first_of_three_months_ago_toronto()
+    payload = {
+        "seq_len": cfg["seq_len"],
+        "horizon": cfg["horizon"],
+        "cap_date": cap_date,
+        "model_bucket": cfg["model_bucket"],
+        "model_prefix": cfg["model_prefix"],
+    }
+
+    if cfg.get("start_date"):
+        payload["start_date"] = cfg["start_date"]
+    if int(cfg.get("val_holdout_days", 0) or 0) > 0:
+        payload["val_holdout_days"] = int(cfg["val_holdout_days"]) 
+    if int(cfg.get("recency_half_life_days", 0) or 0) > 0:
+        payload["recency_half_life_days"] = int(cfg["recency_half_life_days"]) 
+
+    app = context.resources.boc_forecaster_celery
+    result = app.send_task("trainer.train_xgb_from_io", kwargs=payload)
+
+    context.log.info(
+        f"Enqueued XGB training with payload={payload} task_id={result.id}"
+    )
+    return {"task_id": result.id, "cap_date": cap_date}
+
+@op(
+    config_schema={
         "model_bucket": str,
         "model_prefix": str,
         "model_key": Field(str, is_required=False, default_value=""),

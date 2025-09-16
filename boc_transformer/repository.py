@@ -32,7 +32,7 @@ from .schedules import (
     assemble_macro_daily_schedule,
     assemble_macro_daily_job,
 )
-from .ops import hello_world, enqueue_xgb_evaluation, enqueue_xgb_prediction
+from .ops import hello_world, enqueue_xgb_evaluation, enqueue_xgb_prediction, xg_boost_train
 
 io_manager = s3_pickle_io_manager.configured({
     "s3_bucket":       {"env": "S3_BUCKET"},
@@ -56,9 +56,14 @@ boc_forecaster_celery = Celery("enqueue", broker=broker, backend=backend)
 def demo_job():
     hello_world()
 
+@job
+def xgb_training_job():
+    xg_boost_train()
+
 defs = Definitions(
     jobs=[
         demo_job,
+        xgb_training_job,
         daily_policy_rate_job,
         daily_cpi_job,
         daily_yield_2y_job,

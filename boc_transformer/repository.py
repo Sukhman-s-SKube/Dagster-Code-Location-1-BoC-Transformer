@@ -32,7 +32,14 @@ from .schedules import (
     assemble_macro_daily_schedule,
     assemble_macro_daily_job,
 )
-from .ops import hello_world, enqueue_xgb_evaluation, enqueue_xgb_prediction, xg_boost_train
+from .ops import (
+    hello_world,
+    enqueue_xgb_evaluation,
+    enqueue_xgb_prediction,
+    xg_boost_train,
+    xg_boost_predict_today,
+    xg_boost_evaluate_recent,
+)
 
 io_manager = s3_pickle_io_manager.configured({
     "s3_bucket":       {"env": "S3_BUCKET"},
@@ -60,10 +67,20 @@ def demo_job():
 def xgb_training_job():
     xg_boost_train()
 
+@job
+def xgb_prediction_today_job():
+    xg_boost_predict_today()
+
+@job
+def xgb_evaluation_recent_job():
+    xg_boost_evaluate_recent()
+
 defs = Definitions(
     jobs=[
         demo_job,
         xgb_training_job,
+        xgb_prediction_today_job,
+        xgb_evaluation_recent_job,
         daily_policy_rate_job,
         daily_cpi_job,
         daily_yield_2y_job,

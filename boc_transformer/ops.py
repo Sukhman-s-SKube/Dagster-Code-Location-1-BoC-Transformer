@@ -18,25 +18,77 @@ def hello_world():
 
 @op(
     config_schema={
-        # core XGBoost training params
-        "seq_len": int,          # e.g., 90
-        "horizon": int,          # e.g., 30
-        "model_bucket": str,     # e.g., "models"
-        "model_prefix": str,     # e.g., "boc_policy_classifier"
-        # optional controls
-        "start_date": Field(str, is_required=False, default_value=""),           # ISO date
-        "cap_date": Field(str, is_required=False, default_value=""),             # ISO date; default computed
-        "val_holdout_days": Field(int, is_required=False, default_value=0),       # 0 => worker default
-        "recency_half_life_days": Field(int, is_required=False, default_value=0), # 0 => disabled
+        "model_bucket": str,
+        "model_prefix": str,
+        "model_key": Field(str, is_required=False, default_value=""),
+    },
+    required_resource_keys={"boc_forecaster_celery"},
+)
+def xg_boost_predict_today(context):
+    cfg = context.op_config
+    tz = ZoneInfo("America/Toronto")
+    date_str = datetime.now(tz=tz).date().isoformat()
+
+    payload = {
+        "model_bucket": cfg["model_bucket"],
+        "model_prefix": cfg["model_prefix"],
+        "model_key": (cfg.get("model_key") or None) if "model_key" in cfg else None,
+        "date_str": date_str,
+    }
+
+    app = context.resources.boc_forecaster_celery
+    result = app.send_task("trainer.predict_xgb_from_io", kwargs=payload)
+    context.log.info(
+        f"Enqueued XGB prediction for {date_str} with payload={payload} task_id={result.id}"
+    )
+    return {"task_id": result.id, "date": date_str}
+
+
+@op(
+    config_schema={
+        "model_bucket": str,
+        "model_prefix": str,
+        "model_key": Field(str, is_required=False, default_value=""),
+        "months_back": Field(int, is_required=False, default_value=3),
+    },
+    required_resource_keys={"boc_forecaster_celery"},
+)
+def xg_boost_evaluate_recent(context):
+    cfg = context.op_config
+    tz = ZoneInfo("America/Toronto")
+    months_back = max(0, int(cfg.get("months_back", 3) or 3))
+    start_dt = (datetime.now(tz=tz) - relativedelta(months=months_back)).replace(day=1)
+    start_date = start_dt.date().isoformat()
+
+    payload = {
+        "model_bucket": cfg["model_bucket"],
+        "model_prefix": cfg["model_prefix"],
+        "model_key": (cfg.get("model_key") or None) if "model_key" in cfg else None,
+        "start_date": start_date,
+    }
+
+    app = context.resources.boc_forecaster_celery
+    result = app.send_task("trainer.eval_xgb_from_io", kwargs=payload)
+    context.log.info(
+        f"Enqueued XGB evaluation from {start_date} (to yesterday) with payload={payload} task_id={result.id}"
+    )
+    return {"task_id": result.id, "start_date": start_date}
+
+@op(
+    config_schema={
+        "seq_len": int,          #e.g., 90
+        "horizon": int,          #e.g., 30
+        "model_bucket": str,     #e.g., "models"
+        "model_prefix": str,     #e.g., "boc_policy_classifier"
+        #optional controls
+        "start_date": Field(str, is_required=False, default_value=""),           #ISO date
+        "cap_date": Field(str, is_required=False, default_value=""),             #ISO date; default computed
+        "val_holdout_days": Field(int, is_required=False, default_value=0),       # 0 worker default
+        "recency_half_life_days": Field(int, is_required=False, default_value=0), # 0 disabled
     },
     required_resource_keys={"boc_forecaster_celery"},
 )
 def xg_boost_train(context):
-    """Enqueue XGBoost training on the new trainer worker.
-
-    This op replaces the old TFT training op. It trains a multi-class
-    policy-rate classifier using engineered features from ClickHouse.
-    """
     cfg = context.op_config
 
     cap_date = cfg.get("cap_date") or _cap_first_of_three_months_ago_toronto()
@@ -68,7 +120,7 @@ def xg_boost_train(context):
         "model_bucket": str,
         "model_prefix": str,
         "model_key": Field(str, is_required=False, default_value=""),
-        "date_str": Field(str, is_required=False, default_value=""),  # ISO date, e.g., "2024-09-10"
+        "date_str": Field(str, is_required=False, default_value=""),
     },
     required_resource_keys={"boc_forecaster_celery"},
 )

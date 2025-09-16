@@ -1,5 +1,5 @@
 import os
-from dagster import job, op, Definitions
+from dagster import job, op, Definitions, Field
 from dagster_aws.s3 import s3_pickle_io_manager, s3_resource
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
@@ -16,35 +16,60 @@ def _cap_first_of_three_months_ago_toronto() -> str:
 def hello_world():
     return "Hello World!"
 
-@op(config_schema={
-    "bucket": str,          # "dagster"
-    "io_prefix": str,       # "boc_io_manager"
-    "seq_len": int,         # 90
-    "horizon": int,         # 7
-    "model_bucket": str,    # "models"
-    "model_prefix": str,    # "boc_forecaster"
-    "max_epochs": int,      # 10
-}, required_resource_keys={"boc_forecaster_celery"},)
-def enqueue_tft_training(context):
-    cap_date = _cap_first_of_three_months_ago_toronto()
+@op(
+    config_schema={
+        "model_bucket": str,
+        "model_prefix": str,
+        "model_key": Field(str, is_required=False, default_value=""),
+        "date_str": Field(str, is_required=False, default_value=""),  # ISO date, e.g., "2024-09-10"
+    },
+    required_resource_keys={"boc_forecaster_celery"},
+)
+def enqueue_xgb_prediction(context):
 
     cfg = context.op_config
     payload = {
-        "bucket": cfg["bucket"],
-        "io_prefix": cfg["io_prefix"],
-        "seq_len": cfg["seq_len"],
-        "horizon": cfg["horizon"],
-        "cap_date": cap_date,
         "model_bucket": cfg["model_bucket"],
         "model_prefix": cfg["model_prefix"],
-        "max_epochs": cfg["max_epochs"],
+        "model_key": (cfg.get("model_key") or None) if "model_key" in cfg else None,
+        "date_str": (cfg.get("date_str") or None) if "date_str" in cfg else None,
     }
 
     app = context.resources.boc_forecaster_celery
-
-    result = app.send_task("trainer.train_tft_from_io", kwargs=payload)
-
+    result = app.send_task("trainer.predict_xgb_from_io", kwargs=payload)
     context.log.info(
-        f"Enqueued training with payload={payload} task_id={result.id}"
+        f"Enqueued XGB prediction with payload={payload} task_id={result.id}"
     )
-    return {"task_id": result.id, "cap_date": cap_date}
+    return {"task_id": result.id}
+
+
+@op(
+    config_schema={
+        "model_bucket": str,
+        "model_prefix": str,
+        "model_key": Field(str, is_required=False, default_value=""),
+        "start_date": Field(str, is_required=False, default_value=""),
+        "cap_date": Field(str, is_required=False, default_value=""),
+        "seq_len": Field(int, is_required=False, default_value=90),
+        "horizon": Field(int, is_required=False, default_value=30),
+    },
+    required_resource_keys={"boc_forecaster_celery"},
+)
+def enqueue_xgb_evaluation(context):
+    cfg = context.op_config
+    payload = {
+        "model_bucket": cfg["model_bucket"],
+        "model_prefix": cfg["model_prefix"],
+        "model_key": (cfg.get("model_key") or None) if "model_key" in cfg else None,
+        "start_date": (cfg.get("start_date") or None) if "start_date" in cfg else None,
+        "cap_date": (cfg.get("cap_date") or None) if "cap_date" in cfg else None,
+        "seq_len": cfg.get("seq_len", 90),
+        "horizon": cfg.get("horizon", 30),
+    }
+
+    app = context.resources.boc_forecaster_celery
+    result = app.send_task("trainer.eval_xgb_from_io", kwargs=payload)
+    context.log.info(
+        f"Enqueued XGB evaluation with payload={payload} task_id={result.id}"
+    )
+    return {"task_id": result.id}

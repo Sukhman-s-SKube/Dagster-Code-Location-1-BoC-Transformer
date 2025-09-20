@@ -15,19 +15,12 @@ from .assets import (
 )
 from .resources import fred_api, boc_api, clickhouse_macro_io_manager
 from .schedules import (
-    daily_policy_rate_schedule,
     daily_policy_rate_job,
-    daily_cpi_schedule,
     daily_cpi_job,
-    daily_yield_2y_schedule,
     daily_yield_2y_job,
-    daily_yield_5y_schedule,
     daily_yield_5y_job,
-    daily_yield_10y_schedule,
     daily_yield_10y_job,
-    daily_oil_schedule,
     daily_oil_job,
-    daily_unemployment_schedule,
     daily_unemployment_job,
     assemble_macro_daily_schedule,
     assemble_macro_daily_job,
@@ -109,13 +102,6 @@ defs = Definitions(
         "boc_forecaster_celery": boc_forecaster_celery,
     },
     schedules=[
-        daily_policy_rate_schedule,
-        daily_cpi_schedule,
-        daily_yield_2y_schedule,
-        daily_yield_5y_schedule,
-        daily_yield_10y_schedule,
-        daily_oil_schedule,
-        daily_unemployment_schedule,
         assemble_macro_daily_schedule,
     ],
 )

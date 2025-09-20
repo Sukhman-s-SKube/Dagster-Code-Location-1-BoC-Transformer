@@ -29,9 +29,19 @@ daily_unemployment_job = define_asset_job(
     selection=AssetSelection.keys("daily_unemployment"),
 )
 
+# Ensure assemble runs in the same run after its upstream assets complete for the partition
 assemble_macro_daily_job = define_asset_job(
     name="materialize_assemble_macro_daily_row",
-    selection=AssetSelection.keys("assemble_macro_daily_row"),
+    selection=AssetSelection.keys(
+        "daily_policy_rate",
+        "daily_cpi",
+        "daily_yield_2y",
+        "daily_yield_5y",
+        "daily_yield_10y",
+        "daily_oil",
+        "daily_unemployment",
+        "assemble_macro_daily_row",
+    ),
 )
 
 daily_policy_rate_schedule = build_schedule_from_partitioned_job(job=daily_policy_rate_job)
